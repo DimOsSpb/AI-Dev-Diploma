@@ -1,0 +1,60 @@
+2026-06-11T13:27:10.464528+0300 Loading STT model: small
+2026-06-11T13:28:01.817943+0300 [answer] Провайдер openai/gpt-oss-120b:free недоступен: cannot access local variable 'total_tokens' where it is not associated with a value
+2026-06-11T13:28:01.822265+0300 faq | escalation/none | 0 tok | 10.207s | cache=False | Q: Что такое ошибка 413? | A: Передаю вопрос специалисту.
+2026-06-11T13:30:29.152904+0300 Loading STT model: small
+2026-06-11T13:30:51.414271+0300 faq | cache/cache | 0 tok | 8.413s | cache=True | Q: Что такое ошибка 413? | A: Передаю вопрос специалисту.
+2026-06-11T13:32:54.332853+0300 Loading STT model: small
+2026-06-11T13:33:12.107864+0300 faq | cache/cache | 0 tok | 2.987s | cache=True | Q: Что такое ошибка 413? | A: Передаю вопрос специалисту.
+2026-06-11T13:34:37.906671+0300 [answer] Провайдер openai/gpt-oss-120b:free недоступен: cannot access local variable 'total_tokens' where it is not associated with a value
+2026-06-11T13:34:37.910417+0300 technical | escalation/none | 0 tok | 5.238s | cache=False | Q: Какое состояние кластера Proxmox | A: Передаю вопрос специалисту.
+2026-06-11T13:47:57.147814+0300 Loading STT model: small
+2026-06-11T13:49:23.073041+0300 [answer] Провайдер openai/gpt-oss-120b:free недоступен: cannot access local variable 'total_tokens' where it is not associated with a value
+2026-06-11T13:49:23.076638+0300 technical | escalation/none | 0 tok | 4.388s | cache=False | Q: Состояние кластера Proxmox? | A: Передаю вопрос специалисту.
+2026-06-11T13:51:59.503749+0300 Loading STT model: small
+2026-06-11T13:58:07.231953+0300 Loading STT model: small
+2026-06-11T14:02:05.975975+0300 [answer] Провайдер openai/gpt-oss-120b:free недоступен: cannot access local variable 'total_tokens' where it is not associated with a value
+2026-06-11T14:02:37.663408+0300 Loading STT model: small
+2026-06-11T14:29:43.119213+0300 Loading STT model: small
+2026-06-11T14:33:21.006816+0300 Модель вызвала инструмент: pve_status Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T14:35:53.352360+0300 Loading STT model: small
+2026-06-11T14:36:29.960774+0300 Модель вызвала инструмент: 'pve_status' Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T14:39:04.359416+0300 Loading STT model: small
+2026-06-11T14:39:23.200659+0300 Loading STT model: small
+2026-06-11T14:39:44.621556+0300 Модель вызвала инструмент: 'pve_status' Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T14:41:57.718216+0300 Loading STT model: small
+2026-06-11T14:42:22.802537+0300 Модель вызвала инструмент: 'pve_status' Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T14:42:27.642323+0300 [answer] Провайдер openai/gpt-oss-120b:free недоступен: 'str(e)'
+2026-06-11T14:42:27.646205+0300 faq | escalation/none | None tok | 11.154s | cache=False | Q: Какое состояние кластера  PVE? | A: Передаю вопрос специалисту.
+2026-06-11T15:34:53.314651+0300 Loading STT model: small
+2026-06-11T15:35:59.167185+0300 Модель вызвала инструмент: 'pve_status' Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T15:36:02.528616+0300 [answer] Провайдер openai/gpt-oss-120b:free недоступен: 'str(e)'
+2026-06-11T15:36:02.534264+0300 faq | escalation/none | None tok | 11.454s | cache=False | Q: Какое состояние кластера  PVE? | A: Передаю вопрос специалисту.
+2026-06-11T15:40:26.913744+0300 Модель вызвала инструмент: 'pve_status' Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T15:40:30.010997+0300 [answer] Провайдер openai/gpt-oss-120b:free недоступен: 'str(e)'
+2026-06-11T15:42:34.301465+0300 Loading STT model: small
+2026-06-11T15:44:07.475067+0300 Модель вызвала инструмент: 'pve_status' Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T15:44:11.915771+0300 [answer] Провайдер openai/gpt-oss-120b:free недоступен: 'str(e)'
+2026-06-11T15:44:11.920727+0300 faq | escalation/none | None tok | 69.771s | cache=False | Q: Какое состояние кластера  PVE? | A: Передаю вопрос специалисту.
+2026-06-11T15:45:18.216628+0300 Модель вызвала инструмент: 'pve_status' Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T15:47:30.696175+0300 [answer] Провайдер openai/gpt-oss-120b:free недоступен: 'str(e)'
+2026-06-11T15:47:30.705603+0300 faq | escalation/none | None tok | 165.613s | cache=False | Q: Какое состояние кластера  PVE? | A: Передаю вопрос специалисту.
+2026-06-11T15:48:05.798010+0300 Модель вызвала инструмент: 'pve_status' Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T17:37:12.050234+0300 Loading STT model: small
+2026-06-11T17:38:18.891532+0300 Модель вызвала инструмент: 'pve_status' Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T17:48:55.908430+0300 Loading STT model: small
+2026-06-11T17:49:39.844539+0300 Модель вызвала инструмент: 'pve_status' Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T17:49:43.242271+0300 PVEExeption - 401 Unauthorized: Authentication failed! - {'errors': b''}
+2026-06-11T17:49:43.249587+0300 faq | escalation/none | None tok | 17.996s | cache=False | Q: Какое состояние кластера  PVE? | A: Передаю вопрос специалисту.
+2026-06-11T17:54:20.224979+0300 Модель вызвала инструмент: 'pve_status' Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T18:26:59.446151+0300 Loading STT model: small
+2026-06-11T18:27:48.220502+0300 Модель вызвала инструмент: 'pve_status' Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T18:28:14.872570+0300 PVEExeption - 401 Unauthorized: Authentication failed! - {'errors': b''}
+2026-06-11T18:28:14.876190+0300 Переключаюсь на fallback: qwen2:1.5b
+2026-06-11T18:28:15.263050+0300 [answer] Провайдер qwen2:1.5b недоступен: Error code: 400 - {'error': {'message': 'registry.ollama.ai/library/qwen2:1.5b does not support tools', 'type': 'invalid_request_error', 'param': None, 'code': None}}
+2026-06-11T18:28:15.266392+0300 faq | escalation/none | None tok | 34.829s | cache=False | Q: Какое состояние кластера  PVE? | A: Передаю вопрос специалисту.
+2026-06-11T18:34:34.205729+0300 Loading STT model: small
+2026-06-11T18:35:29.648740+0300 Модель вызвала инструмент: 'pve_status' Аргументы: {'check_quorum_only': False, 'include_nodes': True, 'specific_node': ''}
+2026-06-11T18:36:06.813713+0300 faq | primary/openai/gpt-oss-120b:free | None tok | 44.195s | cache=False | Q: Какое состояние кластера  PVE? | A: Состояние кластера Proxmox (PVE):
+
+- Кластер **pm1**: quorate = 1 (кворум достигнут).  
+- Все 4 узла

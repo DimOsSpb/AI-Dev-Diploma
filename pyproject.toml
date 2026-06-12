@@ -1,0 +1,33 @@
+[project]
+name = "diploma"
+version = "0.1.0"
+description = "Дипломная работа по курсу AI-Dev"
+readme = "README.md"
+authors = [
+    { name = "Dmitrii Osipov", email = "dimosspb@vk.ru" }
+]
+
+dependencies = [
+    "cli",
+    "infraassist",
+]
+
+[tool.uv]
+package = false
+[tool.uv.workspace]
+members = [
+    "apps/*",
+    "packages/*",
+]
+[tool.uv.sources]
+cli = { workspace = true }
+infraassist = { workspace = true }
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic" # Вместо рекомендованного строгого режима
+
+extraPaths = [
+    "packages/infraassist/src/infraassist"
+]
