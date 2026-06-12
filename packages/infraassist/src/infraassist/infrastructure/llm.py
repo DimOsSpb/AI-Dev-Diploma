@@ -18,8 +18,8 @@ from loguru import logger
 from openai import APIStatusError, OpenAI, RateLimitError
 from openai._types import Omit, omit
 from openai.types.chat import (
+    ChatCompletion,
     ChatCompletionFunctionToolParam,
-    ChatCompletionMessage,
     ChatCompletionMessageParam,
 )
 from tenacity import (
@@ -63,8 +63,8 @@ class RobustLLMClient:
         """Классифицирует запрос: primary → fallback → эвристика."""
         for client, model, _ in self._provider_chain():
             try:
-                mess = self._call(client, model, messages, temperature=0, max_tokens=64)
-                raw = mess.content or ""
+                res = self._call(client, model, messages, temperature=0, max_tokens=64)
+                raw = res.choices[0].message.content or ""
                 return Category(raw.strip().lower())
             except Exception as e:
                 logger.warning("[classify] - Провайдер {} недоступен: {}", model, e)  # noqa: S112
@@ -95,7 +95,15 @@ class RobustLLMClient:
             try:
                 if used_fallback:
                     logger.info("Переключаюсь на fallback: {}", model)
-                mes = self._call(client, model, messages, tools=tools)
+
+                res = self._call(client, model, messages, tools=tools)
+                mes = res.choices[0].message
+
+                # Извлекаем объект с информацией о токенах
+                usage = getattr(res, "usage", None)
+                total_tokens = None
+                if usage:
+                    total_tokens = usage.total_tokens
 
                 # Проверяем, хочет ли модель вызвать функцию (tool)
                 if mes.tool_calls:
@@ -109,14 +117,19 @@ class RobustLLMClient:
 
                             # Модель возвращает аргументы в виде строки JSON, парсим их в dict  # noqa: E501
                             function_args = json.loads(function_args)
+                            # LOG - function info
                             logger.info(
-                                "Модель вызвала инструмент: '{}' Аргументы: {}",
+                                "Function call: '{}' args: {}",
                                 function_name,
                                 function_args,
                             )
 
                         tool_output = handle_pve_status(**function_args)
-
+                        # LOG - function result
+                        logger.info(
+                            "Function result: '{}'",
+                            tool_output,
+                        )
                         # Отправляем результат работы функции обратно модели
                         messages.append(
                             {  # pyright: ignore[reportArgumentType]
@@ -128,16 +141,15 @@ class RobustLLMClient:
                         )
 
                     # Делаем повторный запрос к модели, передавая ей результат работы функции  # noqa: E501
-                    mes = self._call(client, model, messages)
-
-                # Извлекаем объект с информацией о токенах
-                usage = getattr(mes, "usage", None)
-                total_tokens = None
-                if usage:
-                    total_tokens = usage.total_tokens
+                    res = self._call(client, model, messages)
+                    mes = res.choices[0].message
+                    # Извлекаем объект с информацией о токенах
+                    usage = getattr(res, "usage", None)
+                    if usage:
+                        total_tokens += usage.total_tokens
 
                 # ? text or FALLBACK_ANSWER
-                text = mes.content or FALLBACK_ANSWER
+                text = mes.content or FALLBACK_ANSWER  # pyright: ignore[reportAttributeAccessIssue]
                 return LLMResult(
                     text,
                     total_tokens,
@@ -146,9 +158,9 @@ class RobustLLMClient:
                     used_fallback,
                 )
             except PVEExeption as e:
-                logger.warning("PVEExeption - {}", e)
+                logger.error("PVEExeption - {}", e)
             except Exception as e:
-                logger.warning("[answer] Провайдер {} недоступен: {}", model, e)
+                logger.error("[answer] Провайдер {} недоступен: {}", model, e)
 
         # Все провайдеры недоступны — переводим на оператора
         return LLMResult(FALLBACK_ANSWER, None, "escalation", "none", True)
@@ -177,7 +189,7 @@ class RobustLLMClient:
         temperature: float = 0.2,
         max_tokens: int = 250,
         tools: list[ChatCompletionFunctionToolParam] | Omit = omit,
-    ) -> ChatCompletionMessage:
+    ) -> ChatCompletion:
         """Вызов LLM с retry через tenacity (экспоненциальная задержка)."""
 
         def should_retry(error: BaseException) -> bool:
@@ -193,7 +205,7 @@ class RobustLLMClient:
             retry=retry_if_exception(should_retry),
             reraise=True,
         )
-        def _do() -> ChatCompletionMessage:
+        def _do() -> ChatCompletion:
             response = client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -202,6 +214,6 @@ class RobustLLMClient:
                 timeout=self.settings.request_timeout_seconds,
                 tools=tools,
             )
-            return response.choices[0].message
+            return response
 
         return _do()
