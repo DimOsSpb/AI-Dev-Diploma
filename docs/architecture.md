@@ -1,5 +1,90 @@
 # Диаграмма
 
+```mermaid
+flowchart TB
+
+    classDef layerStyle stroke-width:1px, stroke:#ccc, fill:#fafafa
+    classDef aquaStyle stroke-width:1px, stroke:#46EDC8, fill:#DEFFF8, color:#378E7A
+    
+
+    subgraph LAY_GW ["01. GATEWAY LAYER"]
+        direction TB
+        GW["`**API Gateway (Nginx)**
+        Auth • Rate Limit • SSL`"]
+    end
+    style LAY_GW layerStyle
+
+    subgraph LAY_SRV ["02. SERVICE LAYER"]
+        direction TB
+        SRV["`**Core Service (FastAPI)**
+        Application Logic`"]
+        
+        subgraph COMP ["Внутренние компоненты"]
+            direction LR
+            CACHE["Cache"]
+            STAT["Stat"]
+            LOG["Log"]
+        end
+        SRV ~~~ COMP
+    end
+    style LAY_SRV layerStyle
+
+    subgraph LAY_LLM ["03. LLM LAYER"]
+        direction TB
+
+        subgraph CB ["Circuit Breaker ( Retry & backoff - fail_max=5, timeout=60s )"]
+            direction TB
+
+            subgraph RB [" "]
+                direction LR
+                PR1["`**1. Primary**
+                ChatGPT API`"]
+                
+                PR2["`**2. Secondary**
+                OpenRouter API`"]
+                
+                PR3["`**3. Local**
+                Ollama (Self-hosted)`"]
+
+                PR4["Сервис временно недоступен"]
+                
+                PR1 -.->|CB| PR2 -.->|CB| PR3 -.-> |Error| PR4 
+                
+            end
+            style RB fill:none,stroke:none 
+
+            
+        end
+        CB ~~~ RB
+    end
+    style LAY_LLM layerStyle
+
+    subgraph LAY_DATA ["04. DATA LAYER"]
+        direction LR
+        DATA["Redis / PostgreSQL / Qdrant"]
+    end
+    style LAY_DATA layerStyle
+
+    %% --- ПОТОК ---
+    USER["`**= Оператор =**
+    Telegram / Web UI`"]
+
+    USER <==>|HTTP / WebSockets| GW
+    GW <==> SRV
+
+    SRV -->|Классификация запроса| CB
+    CACHE <--> DATA
+    STAT & LOG --> DATA
+
+    SRV ==>|Запрос к LLM| CB
+
+    PR1 & PR2 & PR3 -.->|Успешный ответ| SRV
+    PR4 -. Проблема .-> SRV
+    USER ~~~ LAY_GW
+    LAY_GW ~~~ LAY_SRV
+    LAY_SRV ~~~ LAY_LLM
+    LAY_SRV ~~~ LAY_DATA
+```
 
 ---
 # ADR (Architecture Decision Record)
