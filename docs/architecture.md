@@ -52,7 +52,6 @@ flowchart TB
                 
             end
             style RB fill:none,stroke:none 
-
             
         end
         CB ~~~ RB
