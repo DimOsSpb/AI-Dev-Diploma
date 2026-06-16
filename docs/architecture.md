@@ -86,6 +86,7 @@ flowchart TB
 ```
 
 ---
+
 # ADR (Architecture Decision Record)
 
 ## ADR-001: Выбор паттерна взаимодействия
