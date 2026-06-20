@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 
 from app.core.config import Settings
 from app.schemas.models import LLMResult
@@ -71,6 +71,54 @@ class LLMClient:
             if msg["role"] == "user":
                 return str(msg["content"])
         return ""
+
+    async def stream_chat(
+        self,
+        messages: list[ChatCompletionMessageParam],
+    ) -> AsyncIterator[str]:
+
+        stream = None
+        model_used = None
+        usage = None
+
+        for client, model, used_fallback in self._provider_chain():
+            try:
+                stream = await client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    stream=True,
+                    stream_options={"include_usage": True},
+                )
+
+                model_used = model
+                break
+
+            except Exception as e:
+                logger.warning(
+                    "Не удалось открыть stream через {}: {}",
+                    model,
+                    e,
+                )
+
+        if stream is None:
+            raise RuntimeError("Все провайдеры недоступны")
+
+        async for chunk in stream:
+            if chunk.usage:
+                usage = chunk.usage
+            if not chunk.choices:
+                continue
+
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
+
+        if usage:
+            logger.info(
+                "stream.finished model={} total_tokens={}",
+                model_used,
+                usage.total_tokens,
+            )
 
     async def batch_chat(
         self,
