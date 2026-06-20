@@ -1,5 +1,3 @@
-**/tts/*/bin
-**/tts/*/models
 __pycache__/
 *.pyc
 .venv

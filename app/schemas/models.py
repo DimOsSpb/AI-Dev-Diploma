@@ -29,7 +29,7 @@ class SessionStats:
 @dataclass(slots=True)
 class LLMResult:
     text: str
-    tokens: int | None
+    tokens: int
     provider: str
     model: str
     used_fallback: bool
