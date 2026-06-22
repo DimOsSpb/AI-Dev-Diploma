@@ -1,242 +1,124 @@
 from __future__ import annotations
 
-import asyncio
-import time
-from collections.abc import AsyncIterator, Iterator
+import hashlib
+import json
+from collections.abc import AsyncIterator
+from typing import Never
 
-from app.core.config import Settings
-from app.schemas.models import LLMResult
-from app.services.cache import RedisCache
-from loguru import logger
-from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletionMessageParam
+from app.core.exceptions import (
+    LLMAuthError,
+    LLMContentFilterError,
+    LLMError,
+    LLMRateLimitError,
+    LLMTimeoutError,
+)
+from app.schemas.chat import ChatDelta, ChatRequest, ChatResponse, Usage
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    AuthenticationError,
+    BadRequestError,
+    RateLimitError,
+)
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
-FALLBACK_ANSWER = "Передаю вопрос специалисту."
 
-
-def _build_client(
-    api_key: str | None, base_url: str | None, timeout: int = 30, max_retries: int = 3
-) -> AsyncOpenAI | None:
-    if not api_key:
-        return None
-
-    return AsyncOpenAI(
-        api_key=api_key,
-        base_url=base_url,
-        timeout=timeout,
-        max_retries=max_retries,
-    )
-
-
-class LLMClient:
-    def __init__(
-        self,
-        settings: Settings,
-        cache: RedisCache | None = None,
-        concurrency: int = 5,
-    ) -> None:
-        self.settings = settings
+class LLMService:
+    def __init__(self, llm, model, cache, ttl: int = 3600):
+        self.llm = llm
+        self.default_model = model
         self.cache = cache
+        self.ttl = ttl
 
-        self.primary = _build_client(
-            settings.api_key,
-            settings.base_url,
-            settings.request_timeout,
-            settings.max_retries,
-        )
+    def _key(self, req: ChatRequest) -> str:
+        payload = req.model_dump(exclude={"user_id", "session_id", "stream"})
+        blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+        return "chat:" + hashlib.sha256(blob.encode()).hexdigest()
 
-        self.fallback = _build_client(
-            settings.fallback_api_key,
-            settings.fallback_base_url,
-            settings.request_timeout,
-            settings.max_retries,
-        )
+    def _raise_domain_error(self, e: Exception) -> Never:
+        if isinstance(e, RateLimitError):
+            raise LLMRateLimitError(str(e)) from e
 
-        self._sem = asyncio.Semaphore(concurrency)
+        if isinstance(e, AuthenticationError):
+            raise LLMAuthError(str(e)) from e
 
-    def _provider_chain(
-        self,
-    ) -> Iterator[tuple[AsyncOpenAI, str, bool]]:
-        if self.primary is not None:
-            yield self.primary, self.settings.primary_model, False
+        if isinstance(e, APITimeoutError):
+            raise LLMTimeoutError(str(e)) from e
 
-        if self.fallback is not None and self.settings.fallback_model:
-            yield self.fallback, self.settings.fallback_model, True
+        if isinstance(e, BadRequestError):
+            msg = str(e).lower()
 
-    def _extract_user_message(
-        self,
-        messages: list[ChatCompletionMessageParam],
-    ) -> str:
-        for msg in reversed(messages):
-            if msg["role"] == "user":
-                return str(msg["content"])
-        return ""
+            if "content" in msg and ("filter" in msg or "policy" in msg):
+                raise LLMContentFilterError(str(e)) from e
 
-    async def stream_chat(
-        self,
-        messages: list[ChatCompletionMessageParam],
-    ) -> AsyncIterator[str]:
+            raise LLMError(str(e)) from e
 
-        stream = None
-        model_used = None
-        usage = None
+        if isinstance(e, APIConnectionError):
+            raise LLMError(f"connection error: {e}") from e
 
-        for client, model, used_fallback in self._provider_chain():
-            try:
-                stream = await client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    stream=True,
-                    stream_options={"include_usage": True},
-                )
+        raise LLMError(str(e)) from e
 
-                model_used = model
-                break
-
-            except Exception as e:
-                logger.warning(
-                    "Не удалось открыть stream через {}: {}",
-                    model,
-                    e,
-                )
-
-        if stream is None:
-            raise RuntimeError("Все провайдеры недоступны")
-
-        async for chunk in stream:
-            if chunk.usage:
-                usage = chunk.usage
-            if not chunk.choices:
-                continue
-
-            delta = chunk.choices[0].delta.content
-            if delta:
-                yield delta
-
-        if usage:
-            logger.info(
-                "stream.finished model={} total_tokens={}",
-                model_used,
-                usage.total_tokens,
-            )
-
-    async def batch_chat(
-        self,
-        messages_list: list[list[ChatCompletionMessageParam]],
-        concurrency: int = 5,
-    ) -> list[LLMResult | BaseException]:
-
-        self._sem = asyncio.Semaphore(concurrency)
-
-        tasks = [self.complete(messages) for messages in messages_list]
-
-        return await asyncio.gather(
-            *tasks,
-            return_exceptions=True,
-        )
-
-    async def complete(
-        self,
-        messages: list[ChatCompletionMessageParam],
-    ) -> LLMResult:
-        started = time.perf_counter()
-        status = "unknown"
-        cache_key: str | None = None
-        model_used = "none"
+    @retry(
+        retry=retry_if_exception_type((
+            RateLimitError,
+            APITimeoutError,
+            APIConnectionError,
+        )),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(min=1, max=10),
+    )
+    async def _call(self, req: ChatRequest) -> ChatResponse:
         try:
-            async with self._sem:
-                async with asyncio.timeout(15):
-                    if self.cache:
-                        cache_key = self.cache._make_key(
-                            self._extract_user_message(messages)
-                        )
-
-                        cached = self.cache.get(cache_key)
-
-                        if cached is not None:
-                            status = "cache"
-                            model_used = status
-                            return LLMResult(
-                                text=str(cached),
-                                tokens=0,
-                                provider=model_used,
-                                model=model_used,
-                                used_fallback=False,
-                            )
-
-                    for client, model, used_fallback in self._provider_chain():
-                        try:
-                            model_used = model
-                            if used_fallback:
-                                logger.info(
-                                    "Переключаюсь на fallback: {}",
-                                    model,
-                                )
-
-                            text, tokens = await self._answer_from(
-                                client,
-                                model,
-                                messages,
-                            )
-
-                            if self.cache and cache_key:
-                                self.cache.set(cache_key, text)
-
-                            status = "success"
-                            return LLMResult(
-                                text=text,
-                                tokens=tokens,
-                                provider=("fallback" if used_fallback else "primary"),
-                                model=model,
-                                used_fallback=used_fallback,
-                            )
-
-                        except Exception as e:
-                            status = "providers_error"
-                            logger.warning(
-                                "Провайдер {} недоступен: {}",
-                                model,
-                                e,
-                            )
-                            raise Exception(e)
-        except TimeoutError:
-            status = "timeout"
-            raise TimeoutError
-        finally:
-            duration_ms = (time.perf_counter() - started) * 1000
-
-            logger.info(
-                "async.llm.call duration_ms={:.2f} model={} prompt_chars={} status={}",
-                duration_ms,
-                model_used,
-                len(self._extract_user_message(messages)),
-                status,
+            raw = await self.llm.chat.completions.create(
+                model=req.model or self.default_model,
+                messages=[m.model_dump() for m in req.messages],
+                temperature=req.temperature,
+                max_tokens=req.max_tokens,
             )
+            return ChatResponse.from_openai(raw)
+        except Exception as e:
+            self._raise_domain_error(e)
 
-        return LLMResult(
-            text=FALLBACK_ANSWER,
-            tokens=0,
-            provider="escalation",
-            model="none",
-            used_fallback=True,
-        )
+    async def complete(self, req: ChatRequest) -> ChatResponse:
 
-    async def _answer_from(
-        self,
-        client: AsyncOpenAI,
-        model: str,
-        messages: list[ChatCompletionMessageParam],
-    ) -> tuple[str, int]:
+        if req.temperature > 0 or self.cache is None:
+            resp = await self._call(req)
+            resp.cached = False
+            return resp
 
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.2,
-            max_tokens=250,
-        )
+        key = self._key(req)
+        blob = await self.cache.get(key)
+        if blob:
+            resp = ChatResponse.model_validate_json(blob)
+            resp.cached = True
+            return resp
 
-        text = (response.choices[0].message.content or "").strip()
+        resp = await self._call(req)
+        resp.cached = False
+        await self.cache.setex(key, self.ttl, resp.model_dump_json())
+        return resp
 
-        tokens = response.usage.total_tokens if response.usage else 0
-
-        return text or FALLBACK_ANSWER, tokens
+    async def stream(self, req: ChatRequest) -> AsyncIterator[ChatDelta]:
+        try:
+            stream = await self.llm.chat.completions.create(
+                model=req.model or self.default_model,
+                messages=[m.model_dump() for m in req.messages],
+                temperature=req.temperature,
+                max_tokens=req.max_tokens,
+                stream=True,
+                stream_options={"include_usage": True},
+            )
+            async for chunk in stream:
+                if getattr(chunk, "choices", None):
+                    delta = chunk.choices[0].delta
+                    if getattr(delta, "content", None):
+                        yield ChatDelta(content=delta.content)
+                if getattr(chunk, "usage", None):
+                    yield ChatDelta(usage=Usage.from_openai(chunk.usage))
+        except Exception as e:
+            self._raise_domain_error(e)

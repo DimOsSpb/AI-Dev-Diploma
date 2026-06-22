@@ -1,46 +1,31 @@
-"""Модели данных приложения.
-
-Все dataclass-ы и type alias-ы собраны в одном месте.
-"""
-
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import StrEnum
+from typing import Literal
+
+from pydantic import BaseModel
 
 
-class Category(StrEnum):
-    FAQ = "faq"
-    TECHNICAL = "technical"
-    COMPLAINT = "complaint"
-    ESCALATION = "escalation"
+class ModelInfo(BaseModel):
+    id: str
+    provider: Literal["openai", "ollama", "anthropic"] = "openai"
+    input_per_1m: float = 0.0
+    output_per_1m: float = 0.0
+    context_window: int | None = None
 
 
-@dataclass(slots=True)
-class SessionStats:
-    total_queries: int = 0
-    escalations: int = 0
-    cache_hits: int = 0
-    cache_misses: int = 0
-    total_tokens: int = 0
-    llm_calls: int = 0
-
-
-@dataclass(slots=True)
-class LLMResult:
-    text: str
-    tokens: int
-    provider: str
-    model: str
-    used_fallback: bool
-
-
-@dataclass(slots=True)
-class AssistantResponse:
-    text: str
-    category: Category
-    from_cache: bool
-    latency_seconds: float
-    provider: str
-    model: str
-    used_fallback: bool
+CATALOG: dict[str, ModelInfo] = {
+    "gpt-4o-mini": ModelInfo(
+        id="gpt-4o-mini",
+        provider="openai",
+        input_per_1m=0.15,
+        output_per_1m=0.60,
+        context_window=128_000,
+    ),
+    "gpt-4o": ModelInfo(
+        id="gpt-4o",
+        provider="openai",
+        input_per_1m=2.50,
+        output_per_1m=10.00,
+        context_window=128_000,
+    ),
+}

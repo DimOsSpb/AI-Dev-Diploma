@@ -1,45 +1,48 @@
-import app.prompts.loader as loader
-from app.core.config import Settings
-from app.schemas.chat import ChatRequest
-from app.services.llm import LLMClient
+import json
+from typing import Any
+
+from app.deps.providers import LLMServiceDep
+from app.schemas.chat import ChatRequest, ChatResponse
 from fastapi import APIRouter
-from sse_starlette import EventSourceResponse
+from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-settings = Settings()
+RESPONSES: dict[int | str, dict[str, Any]] = {
+    200: {"description": "Успешный ответ"},
+    422: {"description": "Ошибка валидации"},
+    429: {"description": "Rate limit"},
+    502: {"description": "Ошибка провайдера"},
+    504: {"description": "Таймаут провайдера"},
+}
 
-client = LLMClient(settings)
+
+@router.post(
+    "",
+    response_model=ChatResponse,
+    summary="Синхронный чат",
+    description="Отправляет сообщения в LLM и возвращает полный ответ.",
+    responses=RESPONSES,
+)
+async def chat_completions(req: ChatRequest, service: LLMServiceDep) -> ChatResponse:
+    return await service.complete(req)
 
 
-@router.post("")
-async def chat(req: ChatRequest):
+@router.post("/stream", summary="Streaming чат через SSE", responses=RESPONSES)
+async def chat_stream(req: ChatRequest, service: LLMServiceDep):
+    async def event_source():
+        async for delta in service.stream(req):
+            if delta.content:
+                yield f"data: {delta.content}\n\n"
 
-    messages = loader.build_answer_messages(
-        loader.build_system_prompt("InfraAssist"),
-        [],
-        req.prompt,
+            elif delta.usage:
+                payload = {"usage": json.dumps(delta.usage.model_dump())}
+                yield f"data: {payload}\n\n"
+
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
     )
-
-    result = await client.complete(messages)
-
-    return {
-        "answer": result.text,
-    }
-
-
-@router.post("/stream")
-async def chat_stream(req: ChatRequest):
-
-    messages = loader.build_answer_messages(
-        loader.build_system_prompt("InfraAssist"),
-        [],
-        req.prompt,
-    )
-
-    async def event_generator():
-
-        async for token in client.stream_chat(messages):
-            yield token
-
-    return EventSourceResponse(event_generator())

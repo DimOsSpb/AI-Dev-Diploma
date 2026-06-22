@@ -1,9 +1,37 @@
+from collections.abc import Iterator
 from functools import lru_cache
 from pathlib import Path
 from typing import ClassVar
 
-from pydantic import Field, model_validator
+from pydantic import BaseModel, Field, model_validator
+from pydantic.types import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def iter_fields(obj: BaseModel, prefix: str = "") -> Iterator[tuple[object, str]]:
+    for field_name in type(obj).model_fields:
+        value = getattr(obj, field_name)
+
+        if isinstance(value, BaseModel):
+            yield from iter_fields(
+                value,
+                field_name,
+            )
+        else:
+            yield obj, field_name
+
+
+class LLMSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="LLM_",
+        env_file=(".env"),
+        extra="ignore",
+    )
+    api_key: SecretStr = SecretStr("sk-***")
+    base_url: str = Field(default="")
+    default_model: str = "gpt-4o-mini"
+    request_timeout: float = 30.0
+    max_retries: int = 3
 
 
 class Settings(BaseSettings):
@@ -13,24 +41,17 @@ class Settings(BaseSettings):
     )
     service_name: str = Field(default="Undefined")
     # Основной провайдер (OpenAI-совместимый API)
-    api_key: str | None = Field(default="")
-    base_url: str = Field(default="")
-    primary_model: str = Field(default="")
-
-    # Fallback-провайдер (OpenAI-совместимый API)
-    fallback_api_key: str | None = Field(default="")
-    fallback_base_url: str = Field(default="")
-    fallback_model: str = Field(default="")
+    llm: LLMSettings = Field(default_factory=LLMSettings)
 
     # Общие настройки
     request_timeout: int = Field(default=30)
     max_retries: int = Field(default=3)
 
     history_limit: int = Field(default=10)
-    log_path: Path = Field(default=Path("assistant.log"))
-    redis_host: str = Field(default="localhost")
+    log_path: Path = Field(default=Path(""))
+    redis_url: str = Field(default="localhost")
     redis_port: int = Field(default=6379)
-    redis_ttl: int = Field(default=3600)
+    cache_ttl: int = Field(default=3600)
 
     # API KEY валидатор
     @staticmethod
@@ -51,13 +72,15 @@ class Settings(BaseSettings):
         # Извлекаем прочитанные переменные из .env
         missing = []
 
-        for field_name in type(self).model_fields:
-            value = getattr(self, field_name)
-
+        for obj, field in iter_fields(self):
+            value = getattr(obj, field)
             if value in (None, ""):
-                missing.append(field_name)
-            if "_key" in field_name[-4:]:
-                setattr(self, field_name, self.resolve_secret_path(value))
+                missing.append(field)
+            if "_key" in field[-4:]:
+                if isinstance(value, SecretStr):
+                    resolved = self.resolve_secret_path(value.get_secret_value())
+                    if resolved is not None:
+                        setattr(obj, field, SecretStr(resolved))
 
         if missing:
             raise ValueError(
