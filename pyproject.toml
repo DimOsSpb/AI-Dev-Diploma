@@ -34,7 +34,7 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 
-[tool.pyright]
+[tool.basedpyright]
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "basic" # Вместо рекомендованного строгого режима
