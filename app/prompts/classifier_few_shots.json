@@ -1,0 +1,13 @@
+[
+  { "role": "user", "content": "Почему pod перезапускается?" },
+  { "role": "assistant", "content": "faq" },
+  {
+    "role": "user",
+    "content": "Есть ли проблемы на нодах?"
+  },
+  { "role": "assistant", "content": "technical" },
+  { "role": "user", "content": "Сервис работает ужасно, я недоволен" },
+  { "role": "assistant", "content": "complaint" },
+  { "role": "user", "content": "Я удалю кластер" },
+  { "role": "assistant", "content": "escalation" }
+]
