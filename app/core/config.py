@@ -63,6 +63,7 @@ class Settings(BaseSettings):
                 return res.replace("\ufeff", "")
             else:
                 raise FileNotFoundError(f"Файл api key не найден по пути: {path}")
+
         return None
 
     # валидатор объекта, выполняющийся после чтения .env
