@@ -1,10 +1,11 @@
 import json
 from typing import Any
 
-from app.deps.providers import LLMServiceDep
-from app.schemas.chat import ChatRequest, ChatResponse
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
+
+from app.deps.providers import LLMServiceDep
+from app.schemas.chat import ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 

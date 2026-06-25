@@ -1,46 +1,60 @@
 # syntax=docker/dockerfile:1.7
 
-# ========== STAGE 1: BUILDER ==========
-FROM python:3.13-slim-bookworm AS builder
+FROM python:3.13-slim-bookworm AS base
 
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy \
-    UV_PYTHON_DOWNLOADS=0
-
-COPY --from=ghcr.io/astral-sh/uv:0.11.14 /uv /uvx /bin/
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev
+COPY --from=ghcr.io/astral-sh/uv:0.11.14 /uv /uvx /bin/
 
-COPY app/ ./app/
+
+# =========================
+# 1. DEPENDENCIES LAYER
+# =========================
+FROM base AS deps
+
 COPY pyproject.toml uv.lock ./
 
+# создаём venv + ставим зависимости
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-# ========== STAGE 2: RUNTIME ==========
-FROM python:3.13-slim-bookworm
+ENV PATH="/app/.venv/bin:$PATH"
+
+
+# =========================
+# 2. APP LAYER
+# =========================
+FROM base AS build
+
+COPY app/ ./app/
+
+
+# =========================
+# 3. RUNTIME (MINIMAL)
+# =========================
+FROM base AS runtime
 
 RUN useradd --create-home --uid 1000 appuser
 
 WORKDIR /app
 
-COPY --from=builder --chown=appuser:appuser /app /app
+# перенос готового venv
+COPY --from=deps /app/.venv /app/.venv
 
-ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+# код отдельно
+COPY --from=build /app/app /app/app
+
+ENV PATH="/app/.venv/bin:$PATH"
 
 USER appuser
+
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request,sys; \
-sys.exit(0) if urllib.request.urlopen('http://localhost:8000/ready', timeout=3).status == 200 else sys.exit(1)" \
-    || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; \
+urllib.request.urlopen('http://localhost:8000/ready')"
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

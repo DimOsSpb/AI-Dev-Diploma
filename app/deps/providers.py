@@ -1,8 +1,9 @@
 from typing import Annotated
 
+from fastapi import Depends, Request
+
 from app.core.config import Settings, get_settings
 from app.services.llm import LLMService
-from fastapi import Depends, Request
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 

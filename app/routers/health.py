@@ -18,7 +18,7 @@ async def ready(request: Request, response: Response) -> dict:
         try:
             await asyncio.wait_for(cache.ping(), timeout=1.5)
             redis_ok = True
-        except Exception:
+        except Exception:  # noqa: BLE001
             redis_ok = False
 
     if redis_ok:
@@ -26,4 +26,3 @@ async def ready(request: Request, response: Response) -> dict:
 
     response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return {"status": "degraded", "redis": "down"}
-

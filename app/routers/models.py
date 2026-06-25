@@ -1,5 +1,6 @@
-from app.schemas.models import CATALOG, ModelInfo
 from fastapi import APIRouter
+
+from app.schemas.models import CATALOG, ModelInfo
 
 router = APIRouter(tags=["models"])
 

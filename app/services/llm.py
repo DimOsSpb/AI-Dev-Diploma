@@ -2,17 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from collections.abc import AsyncIterator
 from typing import Never
 
-from app.core.exceptions import (
-    LLMAuthError,
-    LLMContentFilterError,
-    LLMError,
-    LLMRateLimitError,
-    LLMTimeoutError,
-)
-from app.schemas.chat import ChatDelta, ChatRequest, ChatResponse, Usage
 from openai import (
     APIConnectionError,
     APITimeoutError,
@@ -26,6 +19,20 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+from app.core.exceptions import (
+    LLMAuthError,
+    LLMContentFilterError,
+    LLMError,
+    LLMRateLimitError,
+    LLMTimeoutError,
+)
+from app.observability.logging import logger
+from app.observability.pii import (
+    prompt_hash,
+    redact_pii,
+)
+from app.schemas.chat import ChatDelta, ChatRequest, ChatResponse, Usage
 
 
 class LLMService:
@@ -73,6 +80,12 @@ class LLMService:
         wait=wait_exponential(min=1, max=10),
     )
     async def _call(self, req: ChatRequest) -> ChatResponse:
+        started = time.perf_counter()
+
+        raw_prompt = "\n".join(
+            msg.content for msg in req.messages if isinstance(msg.content, str)
+        )
+
         try:
             raw = await self.llm.chat.completions.create(
                 model=req.model or self.default_model,
@@ -80,8 +93,23 @@ class LLMService:
                 temperature=req.temperature,
                 max_tokens=req.max_tokens,
             )
+
+            latency_ms = round((time.perf_counter() - started) * 1000, 2)
+
+            logger.obs.info(
+                "llm_request_completed",
+                model=raw.model,
+                input_tokens=raw.usage.prompt_tokens,
+                output_tokens=raw.usage.completion_tokens,
+                latency_ms=latency_ms,
+                finish_reason=raw.choices[0].finish_reason,
+                prompt_hash=prompt_hash(raw_prompt),
+                prompt_preview=redact_pii(raw_prompt)[:120],
+            )
+
             return ChatResponse.from_openai(raw)
-        except Exception as e:
+
+        except Exception as e:  # noqa: BLE001
             self._raise_domain_error(e)
 
     async def complete(self, req: ChatRequest) -> ChatResponse:
@@ -120,5 +148,5 @@ class LLMService:
                         yield ChatDelta(content=delta.content)
                 if getattr(chunk, "usage", None):
                     yield ChatDelta(usage=Usage.from_openai(chunk.usage))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._raise_domain_error(e)

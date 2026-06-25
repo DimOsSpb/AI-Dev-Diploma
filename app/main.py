@@ -1,8 +1,15 @@
-import logging
-import time
 import uuid
 from collections.abc import Callable
 from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from openai import AsyncOpenAI
+from structlog.contextvars import (
+    bind_contextvars,
+    clear_contextvars,
+)
 
 from app.core.config import get_settings
 from app.core.exceptions import (
@@ -12,30 +19,24 @@ from app.core.exceptions import (
     LLMRateLimitError,
     LLMTimeoutError,
 )
+from app.observability.logging import logger
 from app.routers import chat, health, models
-from fastapi import FastAPI, Request, Response
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from openai import AsyncOpenAI
 
 try:
     from redis.asyncio import Redis
 except ImportError:
     Redis = None
 
+from app.observability.tracing import setup_tracing
 
 settings = get_settings()
-logging.basicConfig(
-    filename=settings.log_path,
-    level=logging.INFO,
-    encoding="utf-8",
-    format=("%(asctime)s | %(levelname)s | %(name)s | %(message)s"),
-)
-logger = logging.getLogger(settings.service_name)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+
+    setup_tracing(settings.service_name)
+
     app.state.llm = AsyncOpenAI(
         base_url=settings.llm.base_url,
         api_key=settings.llm.api_key.get_secret_value(),
@@ -49,8 +50,8 @@ async def lifespan(app: FastAPI):
             redis_client = Redis.from_url(settings.redis_url, decode_responses=True)
             await redis_client.ping()
             app.state.redis = redis_client
-        except Exception as e:
-            logger.warning("Redis недоступен (%s) — сервис работает без кеша", e)
+        except Exception as e:  # noqa: BLE001
+            logger.app.warning("Redis недоступен (%s) — сервис работает без кеша", e)
 
     yield
 
@@ -58,7 +59,7 @@ async def lifespan(app: FastAPI):
         await app.state.llm.close()
         if app.state.redis is not None:
             await app.state.redis.close()
-    except Exception:  # noqa: S110
+    except Exception:  # noqa: BLE001, S110
         pass
 
 
@@ -75,25 +76,33 @@ async def middleware(
     request: Request,
     call_next: Callable,
 ) -> Response:
-    request.state.request_id = request.headers.get("X-Request-ID", uuid.uuid4().hex)
 
-    t0 = time.perf_counter()
+    request.state.request_id = request.headers.get("X-Request-ID", uuid.uuid4().hex)
+    bind_contextvars(
+        request_id=request.state.request_id,
+        path=request.url.path,
+        method=request.method,
+    )
+
     try:
         response = await call_next(request)
+
     except Exception:
-        logger.exception("unhandled", extra={"request_id": request.state.request_id})
+        logger.app.exception(
+            "unhandled", extra={"request_id": request.state.request_id}
+        )
         raise
 
-    duration_ms = (time.perf_counter() - t0) * 1000
-    response.headers["X-Request-ID"] = request.state.request_id
+    finally:
+        clear_contextvars()
 
-    logger.info(
-        "request method=%s path=%s status=%s duration_ms=%.2f request_id=%s",
+    response.headers["X-Request-ID"] = request.state.request_id
+    logger.app.info(
+        "request request_id=%s method=%s path=%s status=%s",
+        request.state.request_id,
         request.method,
         request.url.path,
         response.status_code,
-        duration_ms,
-        request.state.request_id,
     )
     return response
 
