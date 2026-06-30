@@ -3,16 +3,18 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from collections.abc import AsyncIterator
-from typing import Never
+from collections.abc import AsyncIterator, Iterable
+from typing import Never, cast
 
 from openai import (
     APIConnectionError,
     APITimeoutError,
+    AsyncOpenAI,
     AuthenticationError,
     BadRequestError,
     RateLimitError,
 )
+from openai.types.chat import ChatCompletionMessageParam
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -32,11 +34,12 @@ from app.observability.pii import (
     prompt_hash,
     redact_pii,
 )
-from app.schemas.chat import ChatDelta, ChatRequest, ChatResponse, Usage
+from app.prompts.builder import build_messages
+from app.schemas.chat import ChatDelta, ChatRequest, ChatResponse, Message, Usage
 
 
 class LLMService:
-    def __init__(self, llm, model, cache, ttl: int = 3600):
+    def __init__(self, llm: AsyncOpenAI, model: str, cache, ttl: int = 3600):
         self.llm = llm
         self.default_model = model
         self.cache = cache
@@ -87,11 +90,19 @@ class LLMService:
         )
 
         try:
+            mes = cast(
+                Iterable[ChatCompletionMessageParam],
+                [m.model_dump() for m in req.messages],
+            )
+
             raw = await self.llm.chat.completions.create(
                 model=req.model or self.default_model,
-                messages=[m.model_dump() for m in req.messages],
+                messages=mes,
                 temperature=req.temperature,
                 max_tokens=req.max_tokens,
+                max_completion_tokens=req.max_completion_tokens,
+                # Добавляем эту строчку: она заберет словарь из Pydantic и передаст его в OpenAI клиент
+                extra_body=getattr(req, "extra_body", None),
             )
 
             latency_ms = round((time.perf_counter() - started) * 1000, 2)
@@ -99,8 +110,8 @@ class LLMService:
             logger.obs.info(
                 "llm_request_completed",
                 model=raw.model,
-                input_tokens=raw.usage.prompt_tokens,
-                output_tokens=raw.usage.completion_tokens,
+                input_tokens=raw.usage.prompt_tokens if raw.usage else 0,
+                output_tokens=raw.usage.completion_tokens if raw.usage else 0,
                 latency_ms=latency_ms,
                 finish_reason=raw.choices[0].finish_reason,
                 prompt_hash=prompt_hash(raw_prompt),
@@ -114,28 +125,33 @@ class LLMService:
 
     async def complete(self, req: ChatRequest) -> ChatResponse:
 
-        if req.temperature > 0 or self.cache is None:
-            resp = await self._call(req)
-            resp.cached = False
-            return resp
-
         key = self._key(req)
-        blob = await self.cache.get(key)
-        if blob:
-            resp = ChatResponse.model_validate_json(blob)
-            resp.cached = True
-            return resp
 
+        if req.temperature == 0 and self.cache:
+            blob = await self.cache.get(key)
+            if blob:
+                resp = ChatResponse.model_validate_json(blob)
+                resp.cached = True
+                return resp
+
+        # Извлекаем и перестраиваем сообщения
+        req.messages = cast(list[Message], build_messages(req.messages[0].content))
         resp = await self._call(req)
         resp.cached = False
-        await self.cache.setex(key, self.ttl, resp.model_dump_json())
+
+        if self.cache:
+            await self.cache.setex(key, self.ttl, resp.model_dump_json())
+
         return resp
 
     async def stream(self, req: ChatRequest) -> AsyncIterator[ChatDelta]:
         try:
             stream = await self.llm.chat.completions.create(
                 model=req.model or self.default_model,
-                messages=[m.model_dump() for m in req.messages],
+                messages=cast(
+                    Iterable[ChatCompletionMessageParam],
+                    [m.model_dump() for m in req.messages],
+                ),
                 temperature=req.temperature,
                 max_tokens=req.max_tokens,
                 stream=True,

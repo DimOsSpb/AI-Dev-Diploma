@@ -33,6 +33,10 @@ class LLMSettings(BaseSettings):
     request_timeout: float = 30.0
     max_retries: int = 3
 
+    eval_api_key: SecretStr = SecretStr("sk-***")
+    eval_base_url: str = Field(default="")
+    eval_default_model: str = "gpt-4o-mini"
+
 
 class Settings(BaseSettings):
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
@@ -56,7 +60,7 @@ class Settings(BaseSettings):
     # API KEY валидатор
     @staticmethod
     def resolve_secret_path(v: object | None) -> str | None:
-        if isinstance(v, str) and (v.startswith("~") or v.startswith("/") or "./" in v):
+        if isinstance(v, str) and (v.startswith(("~", "/")) or "./" in v):
             path = Path(v).expanduser()
             if path.is_file():
                 res = path.read_text(encoding="utf-8").strip()
@@ -77,11 +81,10 @@ class Settings(BaseSettings):
             value = getattr(obj, field)
             if value in (None, ""):
                 missing.append(field)
-            if "_key" in field[-4:]:
-                if isinstance(value, SecretStr):
-                    resolved = self.resolve_secret_path(value.get_secret_value())
-                    if resolved is not None:
-                        setattr(obj, field, SecretStr(resolved))
+            if "_key" in field[-4:] and isinstance(value, SecretStr):
+                resolved = self.resolve_secret_path(value.get_secret_value())
+                if resolved is not None:
+                    setattr(obj, field, SecretStr(resolved))
 
         if missing:
             raise ValueError(

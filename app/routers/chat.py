@@ -24,6 +24,7 @@ RESPONSES: dict[int | str, dict[str, Any]] = {
     summary="Синхронный чат",
     description="Отправляет сообщения в LLM и возвращает полный ответ.",
     responses=RESPONSES,
+    name="chat_completions",
 )
 async def chat_completions(req: ChatRequest, service: LLMServiceDep) -> ChatResponse:
     return await service.complete(req)

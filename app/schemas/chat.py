@@ -1,4 +1,4 @@
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -24,13 +24,22 @@ class Usage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: Annotated[list[Message], Field(min_length=1, max_length=50)]
-    temperature: Annotated[float, Field(ge=0.0, le=2.0)] = 0.7
-    max_tokens: Annotated[int, Field(ge=1, le=16_000)] = 1024
+    temperature: Annotated[float, Field(ge=0.0, le=2.0)] = 0.2
+    max_tokens: Annotated[int, Field(ge=1, le=16_000)] = 2024
+    max_completion_tokens: Annotated[int, Field(ge=1, le=16_000)] = 2024
     model: str | None = None
     stream: bool = False
     user_id: str | None = None
     session_id: str | None = None
-
+    extra_body: dict[str, Any] | None = Field(
+        default_factory=lambda: {
+            "thinking_budget_tokens": 0,  # лимит на "мысли"
+            "chat_template_kwargs": {
+                "enable_thinking": False  # Инструкция для JINJA-шаблона Qwen
+            },
+        },
+        description="Кастомные параметры для движка llama.cpp, отключающие Thinking Mode",
+    )
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -69,6 +78,7 @@ class ChatResponse(BaseModel):
 
     @classmethod
     def from_openai(cls, raw) -> "ChatResponse":
+        # print(f"DEBUG RAW OBJECT: {raw}")
         choice = raw.choices[0]
         return cls(
             content=choice.message.content or "",
