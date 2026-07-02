@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import time
 from collections.abc import AsyncIterator, Iterable
 from typing import Never, cast
@@ -30,12 +29,14 @@ from app.core.exceptions import (
     LLMTimeoutError,
 )
 from app.observability.logging import logger
-from app.observability.pii import (
+from app.prompts.builder import build_messages
+from app.schemas.chat import ChatDelta, ChatRequest, ChatResponse, Usage
+from app.services.security.input_validator import validate_input
+from app.services.security.output_filter import filter_output
+from app.services.security.pii import (
     prompt_hash,
     redact_pii,
 )
-from app.prompts.builder import build_messages
-from app.schemas.chat import ChatDelta, ChatRequest, ChatResponse, Message, Usage
 
 
 class LLMService:
@@ -46,9 +47,12 @@ class LLMService:
         self.ttl = ttl
 
     def _key(self, req: ChatRequest) -> str:
-        payload = req.model_dump(exclude={"user_id", "session_id", "stream"})
-        blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
-        return "chat:" + hashlib.sha256(blob.encode()).hexdigest()
+        history_line = "||".join(f"{m.role}:{m.content.strip()}" for m in req.messages)
+        # Собираем метаданные в компактную строку
+        meta_line = f"model:{req.model}|temp:{req.temperature}"
+        # Объединяем всё в финальный blob для хэширования
+        full_blob = f"{meta_line}||{history_line}"
+        return "chat:" + hashlib.sha256(full_blob.encode("utf-8")).hexdigest()
 
     def _raise_domain_error(self, e: Exception) -> Never:
         if isinstance(e, RateLimitError):
@@ -124,6 +128,10 @@ class LLMService:
             self._raise_domain_error(e)
 
     async def complete(self, req: ChatRequest) -> ChatResponse:
+        # input = req.messages[0].content
+        # Валидируем структуру и контент
+        input = validate_input(req.messages)
+        req.messages = build_messages(input)
 
         key = self._key(req)
 
@@ -134,10 +142,10 @@ class LLMService:
                 resp.cached = True
                 return resp
 
-        # Извлекаем и перестраиваем сообщения
-        req.messages = cast(list[Message], build_messages(req.messages[0].content))
         resp = await self._call(req)
         resp.cached = False
+
+        resp.content = filter_output(resp.content)
 
         if self.cache:
             await self.cache.setex(key, self.ttl, resp.model_dump_json())

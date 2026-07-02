@@ -1,6 +1,13 @@
 from typing import Annotated, Any, Literal
 
+import structlog.contextvars
 from pydantic import BaseModel, Field, model_validator
+
+
+def get_current_request_id() -> str | None:
+    # structlog под капотом использует contextvars
+    ctx = structlog.contextvars.get_contextvars()
+    return ctx.get("request_id")
 
 
 class Message(BaseModel):
@@ -74,7 +81,7 @@ class ChatResponse(BaseModel):
     usage: Usage
     finish_reason: str | None = None
     cached: bool = False
-    request_id: str | None = None
+    request_id: str | None = Field(default_factory=get_current_request_id)
 
     @classmethod
     def from_openai(cls, raw) -> "ChatResponse":

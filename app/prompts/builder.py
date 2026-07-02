@@ -12,6 +12,7 @@ from __future__ import annotations
 from openai.types.chat import ChatCompletionMessageParam
 
 from app.core.config import get_settings
+from app.core.context import get_current_app
 from app.schemas.chat import Message
 
 from .loader import (
@@ -29,9 +30,12 @@ CLASSIFIER_FEW_SHOTS = load_classifier_few_shots()
 
 def build_system_prompt() -> str:
     settings = get_settings()
+    app = get_current_app()
+    canary = getattr(app.state, "canary", "CANARY_DEFAULT_TEST")
     return SYSTEM_PROMPT_TEMPLATE.format(
         service_name=settings.service_name,
         service_facts=SERVICE_FACTS,
+        canary=canary,
     )
 
 

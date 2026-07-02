@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from collections.abc import Callable
 from contextlib import asynccontextmanager
@@ -21,12 +22,17 @@ from app.core.exceptions import (
 )
 from app.observability.logging import logger
 from app.routers import chat, health, models
+from app.services.security.exceptions import (
+    SecurityInputViolation,
+    SecurityOutputViolation,
+)
 
 try:
     from redis.asyncio import Redis
 except ImportError:
     Redis = None
 
+from app.core.context import set_current_app
 from app.observability.tracing import setup_tracing
 
 settings = get_settings()
@@ -52,6 +58,9 @@ async def lifespan(app: FastAPI):
             app.state.redis = redis_client
         except Exception as e:  # noqa: BLE001
             logger.app.warning("Redis недоступен (%s) — сервис работает без кеша", e)
+
+    set_current_app(app)
+    app.state.canary = f"CANARY_{secrets.token_hex(4)}"
 
     yield
 
@@ -150,6 +159,36 @@ async def handle_validation(request: Request, exc: RequestValidationError):
             }
         },
         headers={"X-Request-ID": getattr(request.state, "request_id", "")},
+    )
+
+
+@app.exception_handler(SecurityInputViolation)
+async def handle_security_input_violation(
+    request: Request, exc: SecurityInputViolation
+):
+
+    request_id = getattr(request.state, "request_id", "")
+    logger.app.warning(
+        f"Input security attack blocked. request_id: {request_id}, Rule triggered: {exc.rule}"
+    )
+    return JSONResponse(
+        status_code=200,
+        content={"content": f"Blocked by guardrail: {exc.rule}"},
+    )
+
+
+@app.exception_handler(SecurityOutputViolation)
+async def handle_security_output_violation(
+    request: Request, exc: SecurityOutputViolation
+):
+    request_id = getattr(request.state, "request_id", "")
+    logger.app.warning(
+        f"Output filter blocked a response. request_id: {request_id}, Rule triggered: {exc.rule}"
+    )
+
+    return JSONResponse(
+        status_code=200,
+        content={"content": f"Blocked by guardrail: {exc.rule}"},
     )
 
 

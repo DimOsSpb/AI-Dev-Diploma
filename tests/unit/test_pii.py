@@ -1,4 +1,4 @@
-from app.observability.pii import redact_pii
+from app.services.security.pii import redact_pii
 
 
 def test_redact_pii():
