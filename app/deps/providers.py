@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, Request
 
@@ -16,8 +16,16 @@ def get_cache(request: Request):
     return request.app.state.redis
 
 
-LLMDep = Annotated[object, Depends(get_llm)]
+def get_session_factory(request: Request) -> Any:
+    """Возвращает async_sessionmaker, выставленный в lifespan, либо None,
+    если Postgres недоступен. Роуты, которым PG обязателен, должны явно
+    проверять на None и отдавать 503/собственный fallback."""
+    return request.app.state.session_factory
+
+
+LLMDep = Annotated[Any, Depends(get_llm)]
 CacheDep = Annotated[object, Depends(get_cache)]
+SessionFactoryDep = Annotated[Any, Depends(get_session_factory)]
 
 
 def get_llm_service(

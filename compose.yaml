@@ -13,10 +13,13 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       PHOENIX_COLLECTOR_ENDPOINT: http://phoenix:4317
+      DATABASE_URL: postgresql+asyncpg://chat:chat@postgres:5432/chat
     depends_on:
       redis:
         condition: service_healthy
       phoenix:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
 
     healthcheck:
@@ -53,6 +56,7 @@ services:
       - PHOENIX_WORKING_DIR=/data
     volumes:
       - phoenix_data:/data
+
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6006/health').getcode()"]
 
@@ -60,6 +64,26 @@ services:
       timeout: 3s
       retries: 3
 
+  postgres:
+    image: postgres:16
+    container_name: llm-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: chat
+      POSTGRES_USER: chat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chat}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+
 volumes:
   redis_data:
   phoenix_data:
+  pg_data:

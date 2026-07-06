@@ -8,6 +8,7 @@ from app.core.config import get_settings
 class Loggers:
     app = logging.getLogger("app")
     obs = structlog.get_logger("observability")
+    json_repo = logging.getLogger("llm-service.chat.json_repo")
     settings = get_settings()
 
     logging.basicConfig(

@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 from functools import lru_cache
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field, model_validator
 from pydantic.types import SecretStr
@@ -38,6 +38,10 @@ class LLMSettings(BaseSettings):
     eval_default_model: str = "gpt-4o-mini"
 
 
+class MissingEnvVarsError(Exception):
+    """Raised when required environment variables are not set."""
+
+
 class Settings(BaseSettings):
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
         env_file=(".env"),
@@ -56,6 +60,12 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="localhost")
     redis_port: int = Field(default=6379)
     cache_ttl: int = Field(default=3600)
+
+    # Chat service
+    database_url: str = "postgresql+asyncpg://chat:chat@localhost:5432/chat"
+    chat_repository: Literal["json", "postgres"] = "json"
+    chat_storage_dir: Path = Path("./var/chats")
+    chat_context_window: int = 10
 
     # API KEY валидатор
     @staticmethod
@@ -87,7 +97,7 @@ class Settings(BaseSettings):
                     setattr(obj, field, SecretStr(resolved))
 
         if missing:
-            raise ValueError(
+            raise MissingEnvVarsError(
                 "Не заданы переменные ENV:\n"
                 + "\n".join(f"- {name}" for name in missing)
             )

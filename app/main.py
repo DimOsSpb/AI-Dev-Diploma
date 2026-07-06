@@ -1,4 +1,5 @@
 import secrets
+import sys
 import uuid
 from collections.abc import Callable
 from contextlib import asynccontextmanager
@@ -7,12 +8,14 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from structlog.contextvars import (
     bind_contextvars,
     clear_contextvars,
 )
 
-from app.core.config import get_settings
+from app.chat.routes import router as chat_router
+from app.core.config import MissingEnvVarsError, get_settings
 from app.core.exceptions import (
     LLMAuthError,
     LLMContentFilterError,
@@ -35,7 +38,11 @@ except ImportError:
 from app.core.context import set_current_app
 from app.observability.tracing import setup_tracing
 
-settings = get_settings()
+try:
+    settings = get_settings()
+except MissingEnvVarsError as e:
+    logger.app.critical("Не удалось получить настройки (%s)", e)
+    sys.exit(1)
 
 
 @asynccontextmanager
@@ -61,6 +68,19 @@ async def lifespan(app: FastAPI):
 
     set_current_app(app)
     app.state.canary = f"CANARY_{secrets.token_hex(4)}"
+
+    # Postgres: ленивый engine — не падаем, если БД недоступна на старте.
+    app.state.async_engine = None
+    app.state.session_factory = None
+    try:
+        engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+        app.state.async_engine = engine
+        app.state.session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    except Exception as e:  # noqa: BLE001
+        logger.app.warning(
+            "Postgres engine не создан (%s) — postgres-репозиторий недоступен",
+            e,
+        )
 
     yield
 
@@ -195,3 +215,4 @@ async def handle_security_output_violation(
 app.include_router(chat.router)
 app.include_router(health.router)
 app.include_router(models.router)
+app.include_router(chat_router)
