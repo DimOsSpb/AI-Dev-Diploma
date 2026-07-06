@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 from functools import lru_cache
 from pathlib import Path
-from typing import ClassVar, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 from pydantic.types import SecretStr
@@ -43,7 +43,7 @@ class MissingEnvVarsError(Exception):
 
 
 class Settings(BaseSettings):
-    model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
+    model_config = SettingsConfigDict(
         env_file=(".env"),
         extra="ignore",
     )
