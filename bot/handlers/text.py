@@ -33,7 +33,7 @@ async def on_text(message: Message, backend: BackendClient, state: FSMContext) -
     try:
         events = backend.send_message(
             chat_id,
-            message.text,
+            message.text,  # pyright: ignore[reportArgumentType]
             owner_external_id=str(message.chat.id),
         )
         await stream_to_chat(message, events, chat_id=chat_id)

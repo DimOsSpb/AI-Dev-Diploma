@@ -19,6 +19,7 @@ from uuid import UUID
 from fastapi import UploadFile
 
 from app.chat.domain import Chat, ChatMessage
+from app.chat.media import media_to_part
 from app.chat.repository import ChatRepository
 
 logger = logging.getLogger("llm-service.chat")
@@ -142,6 +143,19 @@ class ChatService:
         6. yield token-кадров, накапливать buffer.
         7. Сохранить assistant-сообщение с prompt_id; yield message_saved.
         """
+        # 1. media → part
+        media_refs: dict | None = None
+        if media is not None:
+            mime = media.content_type or ""
+            filename = media.filename
+            size = getattr(media, "size", None)
+            part = await media_to_part(media, self.llm_client)
+            media_refs = {
+                "mime": mime,
+                "size": size,
+                "filename": filename,
+                "part": part,
+            }
 
         # 2. Загрузим чат заранее — нужен owner_external_id для A/B.
         chat = await self.repository.get_chat(chat_id)
@@ -153,6 +167,7 @@ class ChatService:
             chat_id=chat_id,
             role="user",
             content=user_content,
+            media_refs=media_refs,
         )
         await self.repository.append_message(chat_id, user_message)
 

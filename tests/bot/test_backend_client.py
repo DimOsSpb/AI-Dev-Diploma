@@ -88,3 +88,110 @@ async def test_send_message_yields_message_saved_event():
     saved = [e for e in events if e.get("type") == "message_saved"]
     assert len(saved) == 1
     assert saved[0]["message_id"] == "00000000-0000-0000-0000-000000000abc"
+
+
+@pytest.mark.asyncio
+async def test_send_message_with_media_attaches_file():
+    """С media-байтами клиент должен отправить multipart с media-частью."""
+    sse_body = b'data: {"type":"token","delta":"ok"}\n\ndata: {"type":"done"}\n\n'
+    captured_body: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_body["content_type"] = request.headers["content-type"]
+        captured_body["body"] = request.content
+        return httpx.Response(
+            200,
+            content=sse_body,
+            headers={"Content-Type": "text/event-stream"},
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="http://x") as c:
+        client = BackendClient(c)
+        events = [
+            d
+            async for d in client.send_message(
+                uuid4(),
+                "describe",
+                media=b"\xff\xd8\xff\xe0fake-jpeg",
+                mime="image/jpeg",
+                filename="photo.jpg",
+            )
+        ]
+
+    deltas = [e["delta"] for e in events if e.get("type") == "token"]
+    assert deltas == ["ok"]
+    assert captured_body["content_type"].startswith("multipart/form-data")
+    # multipart-тело должно содержать имя файла и текст
+    body = captured_body["body"]
+    assert b"photo.jpg" in body
+    assert b"image/jpeg" in body
+    assert b"describe" in body
+
+
+@pytest.mark.asyncio
+async def test_send_message_ignores_unknown_event_types():
+    sse_body = (
+        b'data: {"type":"ping"}\n\n'
+        b'data: {"type":"token","delta":"hi"}\n\n'
+        b'data: {"type":"done"}\n\n'
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=sse_body)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="http://x") as c:
+        client = BackendClient(c)
+        events = [d async for d in client.send_message(uuid4(), "hi")]
+    deltas = [e["delta"] for e in events if e.get("type") == "token"]
+    assert deltas == ["hi"]
+
+
+@pytest.mark.asyncio
+async def test_send_message_skips_lines_without_data_prefix():
+    sse_body = (
+        b": keepalive\n\n"
+        b'data: {"type":"token","delta":"x"}\n\n'
+        b'data: {"type":"done"}\n\n'
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=sse_body)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="http://x") as c:
+        client = BackendClient(c)
+        events = [d async for d in client.send_message(uuid4(), "hi")]
+    deltas = [e["delta"] for e in events if e.get("type") == "token"]
+    assert deltas == ["x"]
+
+
+@pytest.mark.asyncio
+async def test_clear_messages_sends_delete():
+    chat_id = uuid4()
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        return httpx.Response(204)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="http://x") as c:
+        client = BackendClient(c)
+        await client.clear_messages(chat_id)
+    assert seen["method"] == "DELETE"
+    assert seen["path"] == f"/chats/{chat_id}/messages"
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_chat_raises_on_http_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"error": "boom"})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="http://x") as c:
+        client = BackendClient(c)
+        with pytest.raises(httpx.HTTPStatusError):
+            await client.get_or_create_chat("tg-1", "telegram")

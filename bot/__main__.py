@@ -3,6 +3,7 @@
 import asyncio
 import logging
 
+import uvicorn
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -13,6 +14,7 @@ from bot.config import get_bot_settings
 from bot.handlers import register_routers
 from bot.services.backend_client import BackendClient
 from bot.services.http import build_http_client
+from bot.web import build_api
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,8 +42,28 @@ async def main() -> None:
 
     register_routers(dp)
 
-    log.info("Bot starting (backend=%s)", settings.backend_url)
-    await dp.start_polling(bot)
+    api = build_api(bot, settings.internal_token.get_secret_value())
+    config = uvicorn.Config(
+        api,
+        host="0.0.0.0",
+        port=settings.bot_api_port,
+        log_level="info",
+    )
+    server = uvicorn.Server(config)
+
+    log.info(
+        "Bot starting (backend=%s, notify-port=%s)",
+        settings.backend_url,
+        settings.bot_api_port,
+    )
+    try:
+        await asyncio.gather(
+            dp.start_polling(bot),
+            server.serve(),
+        )
+    finally:
+        await backend.aclose()
+        await bot.session.close()
 
 
 if __name__ == "__main__":

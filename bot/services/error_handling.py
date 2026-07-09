@@ -33,20 +33,21 @@ async def handle_backend_error(message: Message, exc: Exception) -> None:
         if status == 403:
             try:
                 detail = exc.response.json().get("detail", {})
-                if isinstance(detail, dict) and detail.get("code") == "moderation_blocked":
+                if (
+                    isinstance(detail, dict)
+                    and detail.get("code") == "moderation_blocked"
+                ):
                     await message.answer(
                         "🛑 Запрос нарушает правила сервиса. Попробуйте переформулировать."
                     )
                     return
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
             await message.answer("Доступ запрещён.")
             return
         if status == 429:
             retry = exc.response.headers.get("Retry-After", "60")
-            await message.answer(
-                f"🚦 Слишком много запросов. Подождите {retry} сек."
-            )
+            await message.answer(f"🚦 Слишком много запросов. Подождите {retry} сек.")
             return
         if 500 <= status < 600:
             await message.answer("Внутренняя ошибка сервиса. Мы уже знаем.")

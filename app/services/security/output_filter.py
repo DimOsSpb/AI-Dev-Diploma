@@ -17,10 +17,12 @@ def filter_output(answer: str) -> str:
 
     # Проверки безопасности на утечки и политики контента
     app = get_current_app()
-    if app and app.state.canary and app.state.canary in answer:
-        raise SecurityOutputViolation(
-            "System prompt leakage detected via canary token.", rule="canary"
-        )
+    if app:
+        canary = getattr(app.state, "canary", None)
+        if canary and canary in answer:
+            raise SecurityOutputViolation(
+                "System prompt leakage detected via canary token.", rule="canary"
+            )
 
     normalized_system = _normalize_spaces(system_prompt)
     if normalized_system[:80].lower() in normalized_answer.lower():
