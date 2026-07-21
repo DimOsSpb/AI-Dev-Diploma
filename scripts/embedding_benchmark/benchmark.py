@@ -7,7 +7,7 @@ from .runner import BenchmarkResult, EmbeddingBenchmark
 LATENCY_SAMPLE = [
     """
     This is a sample document for embedding benchmark.
-    It represents a document chunk from RAG index.
+    It 1 represents a document chunk from RAG index.
     """
 ]
 
