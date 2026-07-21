@@ -789,6 +789,7 @@ dependencies = [
     { name = "aiohttp-socks" },
     { name = "arize-phoenix" },
     { name = "asyncpg" },
+    { name = "diskcache" },
     { name = "fastapi", extra = ["standard"] },
     { name = "garak" },
     { name = "httpx", extra = ["socks"] },
@@ -805,6 +806,7 @@ dependencies = [
     { name = "structlog" },
     { name = "telegramify-markdown" },
     { name = "tenacity" },
+    { name = "tqdm" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -823,6 +825,7 @@ requires-dist = [
     { name = "aiohttp-socks", specifier = ">=0.11.0" },
     { name = "arize-phoenix", specifier = ">=17.11.0" },
     { name = "asyncpg", specifier = ">=0.31.0" },
+    { name = "diskcache", specifier = ">=5.6" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.137.2" },
     { name = "garak", specifier = ">=0.15.1" },
     { name = "httpx", extras = ["socks"], specifier = ">=0.28.1" },
@@ -839,7 +842,8 @@ requires-dist = [
     { name = "structlog", specifier = ">=0.14.2" },
     { name = "telegramify-markdown", specifier = ">=0.5" },
     { name = "telegramify-markdown", specifier = ">=1.2.0" },
-    { name = "tenacity", specifier = ">=8.2" },
+    { name = "tenacity", specifier = ">=9.0" },
+    { name = "tqdm", specifier = ">=4.66" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.49.0" },
 ]
 
@@ -849,6 +853,15 @@ dev = [
     { name = "pytest", specifier = ">=9.1.0" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "ruff", specifier = ">=0.15.20" },
+]
+
+[[package]]
+name = "diskcache"
+version = "5.6.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3f/21/1c1ffc1a039ddcc459db43cc108658f32c57d271d7289a2794e401d0fdb6/diskcache-5.6.3.tar.gz", hash = "sha256:2c3a3fa2743d8535d832ec61c2054a1641f41775aa7c556758a109941e33e4fc", size = 67916, upload-time = "2023-08-31T06:12:00.316Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3f/27/4570e78fc0bf5ea0ca45eb1de3818a23787af9b390c0b0a0033a1b8236f9/diskcache-5.6.3-py3-none-any.whl", hash = "sha256:5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19", size = 45550, upload-time = "2023-08-31T06:11:58.822Z" },
 ]
 
 [[package]]

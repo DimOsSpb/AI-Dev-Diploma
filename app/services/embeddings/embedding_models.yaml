@@ -1,0 +1,61 @@
+# --------------------------------------------------------------------
+# Конфигурация embedding-моделей
+# --------------------------------------------------------------------
+# Файл содержит конфигурацию embedding-моделей для бенчмарка.
+# Каждая модель описывает конкретную embedding модель с параметрами и настройками.
+#
+# Модели организованы по endpoint (из ai_catalog.yaml):
+# - vsellm: OpenAI-compatible API endpoint (text-embedding-3-small, text-embedding-3-large)
+# - llama_cpp: Local llama.cpp OpenAI-compatible server
+# --------------------------------------------------------------------
+
+models:
+
+  # --------------------------------------------------------------------------
+  # vsellm - OpenAI-compatible API endpoint
+  # Models: text-embedding-3-small, text-embedding-3-large
+  # --------------------------------------------------------------------------
+
+  text-embedding-3-small:
+    enabled: true
+    description: OpenAI baseline model
+    endpoint: vsellm
+    model: text-embedding-3-small
+
+    dimensions: 1536
+    batch_size: 256
+    normalize: true
+
+  text-embedding-3-large:
+    enabled: true
+    description: OpenAI high quality model
+    endpoint: vsellm
+    model: text-embedding-3-large
+
+    dimensions: 3072
+    batch_size: 256
+    normalize: true
+
+  # --------------------------------------------------------------------------
+  # llama_cpp - Local llama.cpp OpenAI-compatible server
+  # Models: qwen3-embedding-0.6b, qwen3-embedding-4b, bge-m3
+  # --------------------------------------------------------------------------
+
+  qwen3-embedding-4b:
+    enabled: true
+    description: Максимальное качество локальной модели
+    endpoint: llama_cpp
+    model: Qwen3-Embedding-4B-Q8_0
+
+    dimensions: 2560
+    batch_size: 32
+    normalize: true
+
+  qwen3-embedding-0.6b:
+    enabled: true
+    description: Compact modern model
+    endpoint: llama_cpp
+    model: Qwen3-Embedding-0.6B-Q8_0
+
+    dimensions: 1024
+    batch_size: 64

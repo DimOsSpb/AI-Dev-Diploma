@@ -28,15 +28,12 @@ from app.core.exceptions import (
     LLMRateLimitError,
     LLMTimeoutError,
 )
+from app.moderation.pii import mask_pii, prompt_hash
 from app.observability.logging import logger
 from app.prompts.builder import build_messages
 from app.schemas.chat import ChatDelta, ChatRequest, ChatResponse, Usage
 from app.services.security.input_validator import validate_input
 from app.services.security.output_filter import filter_output
-from app.services.security.pii import (
-    prompt_hash,
-    redact_pii,
-)
 
 
 class LLMService:
@@ -119,7 +116,7 @@ class LLMService:
                 latency_ms=latency_ms,
                 finish_reason=raw.choices[0].finish_reason,
                 prompt_hash=prompt_hash(raw_prompt),
-                prompt_preview=redact_pii(raw_prompt)[:120],
+                prompt_preview=mask_pii(raw_prompt)[:120],
             )
 
             return ChatResponse.from_openai(raw)

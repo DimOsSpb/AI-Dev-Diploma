@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
     setup_tracing(settings.service_name)
 
     app.state.llm = AsyncOpenAI(
-        base_url=settings.llm.base_url,
+        base_url=settings.llm.url,
         api_key=settings.llm.api_key.get_secret_value(),
         timeout=settings.llm.request_timeout,
         max_retries=settings.llm.max_retries,

@@ -1,0 +1,74 @@
+ДЗ — Production-обвязка (Б4.4)
+Добавить к связке «backend chat-сервис + Telegram-бот» из Б4.1–Б4.3: модерацию в backend,
+admin-эндпоинты, фидбек 👍/👎, полный docker-compose .
+Что реализовать
+
+1. Backend модерация ( app/moderation/ )
+ModerationService с методами:
+check_input(content: str) -> ModerationResult
+check_output(content: str) -> ModerationResult
+ModerationResult(allowed: bool, categories: list[str], reasons: list[str],
+blocked_by: str)
+Слои внутри сервиса:
+Keyword-list / regex (читается из moderation_keywords.yaml ) — самый дешёвый
+слой, отсекает грубые случаи
+Опционально OpenAI Moderation API ( openai.moderations.create с моделью
+omni-moderation-latest ) — flagged + custom thresholds по категориям
+Интеграция в ChatService :
+Перед LLM-call → check_input → если not allowed →
+HTTPException(status_code=403, detail={"code": "moderation_blocked",
+"categories": [...]})
+После генерации (или на финальном буфере стрима) → check_output → если not
+allowed → заменить ответ на "Не могу показать ответ — он мог нарушить
+правила" (или специальный SSE-event для стрима)
+Логирование инцидентов через structlog : хеш текста (sha256[:16]), маскированный
+текст, категории, слой блокировки. Без сырого текста — PII-маскирование
+переиспользуется из M3Б6.
+
+2. Admin endpoints ( app/admin/ )
+Под общим префиксом /chats/admin . Защита — X-Admin-Token из env, проверяется через
+Depends(require_admin) .
+GET /chats/admin/stats → StatsOut :
+total_messages (24ч), active_users (DAU), avg_latency_ms
+moderation_block_rate , feedback_up_ratio
+
+Топ-N вопросов через lower(regexp_replace(content, ...)) + GROUP BY (можно
+опустить, если домен слишком разнообразный)
+GET /chats/admin/users?limit=50 → список последних пользователей с количеством
+чатов и last_seen_at
+POST /chats/admin/broadcast body {message: str, interface_filter: "telegram"}
+→ запись в broadcast_queue(message, interface, status='pending') ; бот забирает в
+фоне и шлёт пользователям
+Полноценная JWT-аутентификация — за скоупом этого ДЗ. Минимум — токен в заголовке.
+
+3. Admin-команды в боте ( bot/handlers/admin.py )
+Фильтр IsAdmin : проверка message.from_user.id in BOT_ADMIN_IDS (из bot/
+config.py , читается из env)
+admin_router.message.filter(IsAdmin()) — фильтр на уровне router, не внутри handler
+/stats — вызывает GET /chats/admin/stats → форматирует JSON в HTML-
+сообщение
+/users — вызывает GET /chats/admin/users → выводит первые 10 в виде таблицы
+/broadcast <text> — вызывает POST /chats/admin/broadcast с текущим
+interface_filter="telegram"
+Для всех команд: при httpx.HTTPStatusError — понятное сообщение админу, не
+трейсбек
+
+4. Feedback ( bot/handlers/feedback.py + app/chat/feedback.py )
+В боте: после каждого ответа бот приклеивает inline-клавиатуру с кнопками 👍 / 👎
+Callback-handler парсит fb:<vote>:<message_id> → POST /chats/{chat_id}/messages/
+{message_id}/feedback с {"value": "up"|"down"}
+В backend: сохранение в message_feedback(message_id, owner_external_id, value,
+created_at) с UNIQUE (owner_external_id, message_id) — защита от дубля
+После сохранения бот убирает inline-кнопки через
+edit_reply_markup(reply_markup=None)
+Критерии «принято»
+Backend возвращает 403 с detail.code == "moderation_blocked" на запрещённый
+ввод
+Бот переводит оба ответа в понятный пользователю текст (не трейсбек)
+В коде бота нет вызовов openai.moderations.create и нет кода рейт-лимита — всё в
+backend
+
+Admin-команды доступны только пользователям из BOT_ADMIN_IDS
+👍/👎 сохраняются в backend с UNIQUE (owner_external_id, message_id)
+docker compose up поднимает app + bot + postgres одной командой
+Volume pg-data сохраняет данные между рестартами

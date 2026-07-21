@@ -23,7 +23,7 @@ from app.main import app
 
 settings = get_settings()
 
-DEFAULT_JUDGE_MODEL = settings.llm.eval_default_model
+DEFAULT_JUDGE_MODEL = settings.llm.vsellm_default_model
 MAX_PARALLEL_JUDGE = 1  # Для локальной Ollama строго 1, чтобы не зависала VRAM
 
 judge_semaphore = asyncio.Semaphore(MAX_PARALLEL_JUDGE)
@@ -55,8 +55,8 @@ JUDGE_SYSTEM_PROMPT = """You are a strict LLM evaluation system.
 
 def create_openai_client() -> AsyncOpenAI:
     return AsyncOpenAI(
-        base_url=settings.llm.eval_base_url,
-        api_key=settings.llm.eval_api_key.get_secret_value(),
+        base_url=settings.llm.vsellm_url,
+        api_key=settings.llm.vsellm_api_key.get_secret_value(),
         timeout=60,
         max_retries=2,
     )

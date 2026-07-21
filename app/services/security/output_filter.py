@@ -1,7 +1,7 @@
 from app.core.context import get_current_app
+from app.moderation.pii import mask_pii
 from app.prompts.builder import build_system_prompt
 from app.services.security.exceptions import SecurityOutputViolation
-from app.services.security.pii import redact_pii
 
 
 def _normalize_spaces(text: str) -> str:
@@ -31,4 +31,4 @@ def filter_output(answer: str) -> str:
         )
 
     # Применяем маскирование PII, принадлежащее слою безопасности
-    return redact_pii(answer)
+    return mask_pii(answer)

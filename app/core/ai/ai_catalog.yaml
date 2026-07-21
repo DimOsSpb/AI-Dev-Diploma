@@ -1,0 +1,181 @@
+
+endpoints:
+
+
+  vsellm:
+
+    description: "vselLM cloud endpoint"
+
+    api: openai-compatible
+
+    url: https://api.vsellm.ru/v1
+
+    api_key: LLM_VSELLM_API_KEY
+
+
+
+  llama_cpp:
+
+      description: "Local llama.cpp OpenAI-compatible server"
+
+      api: openai-compatible
+
+      url: http://172.16.30.12:8080/v1
+
+      api_key: null
+
+
+models:
+
+
+  # --------------------------------------------------------------------------
+  # LLM
+  # --------------------------------------------------------------------------
+
+  gpt-5.4-mini:
+    description: "OpenAI GPT-5.4 mini"
+    type:
+      - llm
+    endpoints:
+      vsellm:
+        api_model: openai/gpt-5.4-mini
+        pricing:
+          input_per_1m_tokens: 0.0
+
+
+  gpt-oss-120b:
+
+    description: "Open source GPT OSS model via OpenRouter"
+
+    type:
+      - llm
+
+    endpoints:
+
+      openrouter:
+
+        api_model: openai/gpt-oss-120b:free
+
+
+
+  qwen3.5-9b:
+
+    description: "Local Qwen3.5 9B quantized model"
+
+    type:
+      - llm
+
+
+    endpoints:
+
+      llama_cpp:
+
+        api_model: Qwen3.5-9B-Q5_K_M
+
+
+
+  # --------------------------------------------------------------------------
+  # Embeddings
+  # --------------------------------------------------------------------------
+
+  text-embedding-3-small:
+
+    description: "OpenAI embedding baseline model"
+
+    type:
+      - embedding
+
+    dimensions: 1536
+
+    normalize: true
+
+
+    endpoints:
+
+      vsellm:
+
+        api_model: text-embedding-3-small
+        pricing:
+          input_per_1m_tokens: 0.026
+
+
+
+  text-embedding-3-large:
+
+    description: "OpenAI high quality embedding model"
+
+    type:
+      - embedding
+
+    dimensions: 3072
+
+    normalize: true
+
+
+    endpoints:
+
+      vsellm:
+
+        api_model: text-embedding-3-large
+        pricing:
+          input_per_1m_tokens: 0.2
+
+
+  qwen3-embedding-0.6b:
+
+    description: "Qwen3 embedding compact model"
+
+    type:
+      - embedding
+
+    dimensions: 1024
+
+    normalize: true
+
+
+    endpoints:
+
+      llama_cpp:
+
+        api_model: Qwen3-Embedding-0.6B-Q8_0
+
+
+
+  qwen3-embedding-4b:
+
+    description: "Qwen3 embedding 4B model"
+
+    type:
+      - embedding
+
+    dimensions: 2560
+
+    normalize: true
+
+
+    endpoints:
+
+      llama_cpp:
+
+        api_model: Qwen3-Embedding-4B-Q8_0
+
+
+
+
+  bge-m3:
+
+    description: "BAAI BGE-M3 multilingual retrieval model"
+
+    type:
+      - embedding
+
+    dimensions: 1024
+
+    normalize: true
+
+
+    endpoints:
+
+      llama_cpp:
+
+        api_model: BAAI/bge-m3-Q8_0

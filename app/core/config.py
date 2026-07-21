@@ -27,15 +27,19 @@ class LLMSettings(BaseSettings):
         env_file=(".env"),
         extra="ignore",
     )
-    api_key: SecretStr = SecretStr("sk-***")
-    base_url: str = Field(default="")
-    default_model: str = "gpt-4o-mini"
+    api_key: SecretStr = SecretStr("")
+    url: str = Field(default="")
+    default_model: str = Field(default="")
     request_timeout: float = 30.0
     max_retries: int = 3
 
-    eval_api_key: SecretStr = SecretStr("sk-***")
-    eval_base_url: str = Field(default="")
-    eval_default_model: str = "gpt-4o-mini"
+    vsellm_api_key: SecretStr = SecretStr("")
+    vsellm_url: str = Field(default="")
+    vsellm_default_model: str = Field(default="")
+
+    llamacpp_api_key: SecretStr = SecretStr("")
+    llamacpp_url: str = Field(default="")
+    llamacpp_default_model: str = Field(default="")
 
 
 class MissingEnvVarsError(Exception):
