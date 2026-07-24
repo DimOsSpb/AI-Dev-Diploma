@@ -62,3 +62,8 @@ filterwarnings = [
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "basic" # Вместо рекомендованного строгого режима
+
+[tool.uv.workspace]
+members = [
+    "kb-builder",
+]

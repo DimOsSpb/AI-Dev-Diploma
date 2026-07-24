@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     chat_storage_dir: Path = Path("./var/chats")
     chat_context_window: int = 10
 
+    # Qdrant vector store settings
+    qdrant_url: str = Field(default="http://localhost:6333")
+    qdrant_api_key: SecretStr = Field(default=SecretStr(""))
+    qdrant_collection: str = Field(default="documents")
+    embedding_dim: int = Field(default=1536)  # text-embedding-3-small dimension
+
     # API KEY валидатор
     @staticmethod
     def resolve_secret_path(v: object | None) -> str | None:
