@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 
 class EmbeddingModelConfig(BaseModel):
-    description: str
+    description: str = ""
     name: str
     endpoint: str
 

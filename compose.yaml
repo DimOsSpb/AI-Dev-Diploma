@@ -85,7 +85,7 @@ services:
       retries: 5
 
   qdrant:
-    image: qdrant/qdrant:v1.14.0
+    image: qdrant/qdrant:v1.18.0
     container_name: llm-qdrant
     restart: unless-stopped
     ports:
@@ -94,16 +94,15 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
     environment:
-      QDRANT__SERVICE__API_KEY: ${QDRANT__SERVICE__API_KEY:}
+      QDRANT__LOG_LEVEL: INFO
+
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:6333/health"]
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
 
-    depends_on:
-      - app
 
 volumes:
   redis_data:

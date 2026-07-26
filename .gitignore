@@ -7,4 +7,4 @@ __pycache__/
 .zed
 .rules
 var/
-scripts/embedding/kb-builder/source/
+scripts/embedding/kb-builder/source

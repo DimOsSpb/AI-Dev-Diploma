@@ -73,9 +73,11 @@ class Settings(BaseSettings):
 
     # Qdrant vector store settings
     qdrant_url: str = Field(default="http://localhost:6333")
-    qdrant_api_key: SecretStr = Field(default=SecretStr(""))
+    qdrant_api_key: SecretStr | None = Field(default=None)
     qdrant_collection: str = Field(default="documents")
     embedding_dim: int = Field(default=1536)  # text-embedding-3-small dimension
+    embedding_model: str = Field(default="")
+    embedding_endpoint: str = Field(default="")
 
     # API KEY валидатор
     @staticmethod
