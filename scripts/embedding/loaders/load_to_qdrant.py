@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 load_to_qdrant.py — загрузка 100+ документов в Qdrant.
 
@@ -17,12 +16,8 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
-from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (
-    Distance,
-    PayloadSchemaType,
     PointStruct,
-    VectorParams,
 )
 from tqdm import tqdm
 
@@ -30,6 +25,7 @@ from app.core.config import get_settings
 from app.services.embeddings.models import EmbeddingModelConfig
 from app.services.embeddings.text_splitter import TextSplitter
 from app.services.embeddings.vectorizer import Vectorizer
+from app.services.vector_store import VectorStore
 
 # -------------------------
 # CONFIG
@@ -103,9 +99,9 @@ def extract_metadata(md_header: str) -> dict[str, Any]:
             elif key == "created_at":
                 try:
                     # Пытаемся парсить ISO формат
-                    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))  # noqa: FURB162
                     metadata[key] = dt
-                except Exception:
+                except Exception:  # noqa: BLE001
                     metadata[key] = value
             elif key == "tags":
                 # Парсим список тегов
@@ -143,127 +139,6 @@ def read_document(filepath: Path) -> tuple[str, str]:
 
 
 # -------------------------
-# QDRANT CLIENT
-# -------------------------
-
-
-class QdrantClient:
-    """
-    Обёртка над AsyncQdrantClient с настройками из конфига.
-
-    Создаётся один раз при старте (DI или модуль-singleton).
-    """
-
-    def __init__(
-        self,
-        url: str = QDRANT_URL,
-        # api_key: str | None = QDRANT_API_KEY,
-        collection: str = QDRANT_COLLECTION,
-        dim: int = EMBEDDING_DIM,
-    ):
-        self.client = AsyncQdrantClient(url=url)
-        self.collection = collection
-        self.dim = dim
-
-    async def isReady(self) -> tuple[bool, str | None]:
-        """Проверяет доступность Qdrant."""
-        try:
-            # Метод возвращает список коллекций, если сервер доступен
-            await self.client.get_collections()
-            return True, None
-        except Exception as e:
-            return False, str(e)
-
-    async def ensure_collection(self) -> None:
-        """
-        Создаёт коллекцию documents с правильной размерностью
-        и payload индексами для фильтрации.
-        """
-
-        # Проверяем существование коллекции
-        collections = await self.client.get_collections()
-        collection_names = {c.name for c in collections.collections}
-
-        if self.collection in collection_names:
-            # Проверяем размерность
-            info = await self.client.get_collection(self.collection)
-
-            # info.config.params.vectors может быть None — проверяем это сначала
-            if info.config and info.config.params and info.config.params.vectors:
-                size: int = info.config.params.vectors.size  # pyright: ignore[reportAttributeAccessIssue]
-                if size != self.dim:
-                    raise RuntimeError(
-                        f"Коллекция {self.collection} уже существует"
-                        f" с размерностью {info.config.params.vectors.size},"  # pyright: ignore[reportAttributeAccessIssue]
-                        f" ожидаем {self.dim}. Удалите коллекцию и перезапустите."
-                    )
-            print(f"  ✓ Коллекция '{self.collection}' существует (dim={self.dim})")
-            return
-
-        # Создаём новую коллекцию
-        vectors_config = VectorParams(size=self.dim, distance=Distance.COSINE)
-        await self.client.create_collection(
-            collection_name=self.collection,
-            vectors_config=vectors_config,
-        )
-        print(f"  ✓ Создана коллекция '{self.collection}' (dim={self.dim})")
-
-        # Создаём payload индексы для фильтрации
-        # Минимум source (KEYWORD), created_at (DATETIME) + category (KEYWORD)
-        indexes = [
-            ("source", PayloadSchemaType.KEYWORD),
-            ("created_at", PayloadSchemaType.DATETIME),
-            ("category", PayloadSchemaType.KEYWORD),
-            ("tenant_id", PayloadSchemaType.INTEGER),  # Опционально
-            ("department", PayloadSchemaType.KEYWORD),  # Опционально
-        ]
-
-        for field, schema_type in indexes:
-            try:
-                await self.client.create_payload_index(
-                    collection_name=self.collection,
-                    field_name=field,
-                    field_schema=schema_type,
-                )
-                print(f"  ✓ Создан индекс для '{field}'")
-            except Exception as e:
-                # Игнорируем, если индекс уже создан
-                if "already exists" not in str(e):
-                    print(f"  ⚠ Ошибка индекса '{field}': {e}")
-
-    async def upsert_batch(
-        self, points: list[PointStruct], batch_size: int = 256
-    ) -> None:
-        """
-        Загружает точки батчами с wait=True на последнем батче.
-        """
-        total = len(points)
-        if total == 0:
-            print("  ℹ Нет точек для загрузки")
-            return
-
-        for start in range(0, total, batch_size):
-            batch = points[start : start + batch_size]
-            wait = start + batch_size >= total
-
-            await self.client.upsert(
-                collection_name=self.collection,
-                points=batch,
-                wait=wait,
-            )
-            progress = (start + len(batch)) / total * 100
-            print(
-                f"  ⏳ Батч {start // batch_size + 1}/{(total + batch_size - 1) // batch_size} "
-                f"({progress:.1f}%) — {len(batch)} точек"
-            )
-
-    async def get_points_count(self) -> int | None:
-        """Возвращает количество точек в коллекции."""
-        info = await self.client.get_collection(self.collection)
-        return info.points_count
-
-
-# -------------------------
 # MAIN
 # -------------------------
 
@@ -294,7 +169,7 @@ async def main() -> None:
     vectorizer = Vectorizer(config)
 
     # Инициализация клиента — используем localhost для local запуска
-    client = QdrantClient(
+    store = VectorStore(
         url=QDRANT_URL,  # localhost:6333 для local запуска
         # api_key=None,  # Для dev не требуется
         collection=QDRANT_COLLECTION,
@@ -302,7 +177,7 @@ async def main() -> None:
     )
 
     # Проверка подключения к Qdrant
-    ready, err = await client.isReady()
+    ready, err = await store.is_ready()
     if ready:
         print("  ✓ Qdrant доступен")
     else:
@@ -310,7 +185,7 @@ async def main() -> None:
         print(" - Убедитесь, что docker compose up -d qdrant выполнен")
 
     # Гарантируем существование коллекции
-    await client.ensure_collection()
+    await store.ensure_collection()
 
     # Считаем документы
     if not KB_PATH.exists():
@@ -373,7 +248,7 @@ async def main() -> None:
 
                 points.append(point)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"  ✗ Ошибка обработки {filepath.name}: {e}")
             continue
 
@@ -391,10 +266,10 @@ async def main() -> None:
         return
 
     # Загрузка в Qdrant
-    await client.upsert_batch(points)
+    await store.upsert(points)
 
     # Финальная проверка
-    count = await client.get_points_count()
+    count = await store.get_points_count()
     print(f"\n{'=' * 60}")
     print(f"📊 Итого в коллекции: {count} точек")
     print(f"{'=' * 60}")
