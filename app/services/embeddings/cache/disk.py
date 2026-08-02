@@ -1,5 +1,4 @@
 from hashlib import sha256
-from pathlib import Path
 from typing import cast
 
 from diskcache import Cache
@@ -10,12 +9,9 @@ from .base import BaseEmbeddingCache
 class DiskEmbeddingCache(BaseEmbeddingCache):
     """Persistent disk cache for embeddings."""
 
-    def __init__(
-        self,
-        path: Path = Path("./var/cache/embeddings"),
-    ):
+    def __init__(self):
         super().__init__()
-        self.cache = Cache(path)
+        self.cache = Cache(self.settings.embedding_cache_path)
 
     @staticmethod
     def _key(

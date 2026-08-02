@@ -13,14 +13,14 @@ YAML/БД, чтобы редактировать без редеплоя.
 Если `session_factory` не передан (нет Postgres) — алерт просто не пишется.
 """
 
-import logging
 import re
 
 from openai import AsyncOpenAI
 
 from app.moderation.domain import ModerationResult
-from app.services.alerter import fire_alert
 from app.observability.logging import logger
+from app.services.alerter import fire_alert
+
 
 class ModerationService:
     def __init__(
@@ -32,7 +32,7 @@ class ModerationService:
     ):
         self.llm = llm_client
         self.use_openai = use_openai_moderation
-        patterns = blocklist if blocklist is not None
+        patterns: list[str] = blocklist if blocklist is not None else []
         self._patterns = [re.compile(p) for p in patterns]
         self.session_factory = session_factory
 

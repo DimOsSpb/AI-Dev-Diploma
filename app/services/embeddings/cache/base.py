@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from app.core.config import get_settings
+
 
 class BaseEmbeddingCache(ABC):
     """Persistent cache for embedding vectors."""
@@ -7,6 +9,7 @@ class BaseEmbeddingCache(ABC):
     def __init__(self) -> None:
         self.hits = 0
         self.misses = 0
+        self.settings = get_settings()
 
     @abstractmethod
     def get(

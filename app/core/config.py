@@ -78,6 +78,16 @@ class Settings(BaseSettings):
     embedding_dim: int = Field(default=1536)  # text-embedding-3-small dimension
     embedding_model: str = Field(default="")
     embedding_endpoint: str = Field(default="")
+    embedding_cache_path: Path | None = Field(default=None)
+
+    rag_llm_model: str = Field(default="")
+    rag_llm_endpoint: str = Field(default="")
+    rag_collection: str = Field(default="rag_block_03")
+    rag_data_dir: str = Field(default="data/rag-block-03")
+    rag_chunk_size: int = Field(default=512)
+    rag_chunk_overlap: int = Field(default=64)
+    rag_similarity_top_k: int = Field(default=3)
+    rag_score_threshold: float = Field(default=0.5)
 
     # API KEY валидатор
     @staticmethod

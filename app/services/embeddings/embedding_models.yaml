@@ -44,7 +44,7 @@ models:
   qwen3-embedding-4b:
     enabled: true
     description: Максимальное качество локальной модели
-    endpoint: llama_cpp
+    endpoint: llama.cpp
     model: Qwen3-Embedding-4B-Q8_0
 
     dimensions: 2560
@@ -54,7 +54,7 @@ models:
   qwen3-embedding-0.6b:
     enabled: true
     description: Compact modern model
-    endpoint: llama_cpp
+    endpoint: llama.cpp
     model: Qwen3-Embedding-0.6B-Q8_0
 
     dimensions: 1024

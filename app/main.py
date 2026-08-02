@@ -24,7 +24,8 @@ from app.core.exceptions import (
     LLMTimeoutError,
 )
 from app.observability.logging import logger
-from app.routers import chat, health, models
+from app.routers import chat, health, models, rag
+from app.services.rag import get_rag
 from app.services.security.exceptions import (
     SecurityInputViolation,
     SecurityOutputViolation,
@@ -81,6 +82,10 @@ async def lifespan(app: FastAPI):
             "Postgres engine не создан (%s) — postgres-репозиторий недоступен",
             e,
         )
+
+    rag = get_rag()
+
+    await rag.build()
 
     yield
 
@@ -216,3 +221,4 @@ app.include_router(chat.router)
 app.include_router(health.router)
 app.include_router(models.router)
 app.include_router(chat_router)
+app.include_router(rag.router)

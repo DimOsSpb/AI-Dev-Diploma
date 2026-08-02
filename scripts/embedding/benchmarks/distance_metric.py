@@ -39,7 +39,7 @@ async def clone_collection(
     offset = None
 
     while True:
-        records, offset = await store.client.scroll(
+        records, offset = await store.aclient.scroll(
             collection_name=source,
             limit=256,
             offset=offset,

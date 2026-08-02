@@ -1,4 +1,4 @@
-from qdrant_client import AsyncQdrantClient
+from qdrant_client import AsyncQdrantClient, QdrantClient
 from qdrant_client.http.models import ScoredPoint
 from qdrant_client.models import (
     Distance,
@@ -20,17 +20,25 @@ class VectorStore:
         settings=None,
     ) -> None:
         self.settings = get_settings()
+        if collection:
+            self.collection = collection
+        else:
+            self.collection = self.settings.qdrant_collection
+        if dim:
+            self.dim = dim
+        else:
+            self.dim = self.settings.embedding_dim
 
-        self.collection = self.settings.qdrant_collection
-        self.dim = self.settings.embedding_dim
-
-        self.client = AsyncQdrantClient(
+        self.aclient = AsyncQdrantClient(
+            url=self.settings.qdrant_url,
+        )
+        self.client = QdrantClient(
             url=self.settings.qdrant_url,
         )
 
     async def is_ready(self) -> tuple[bool, str | None]:
         try:
-            await self.client.get_collections()
+            await self.aclient.get_collections()
             return True, None
         except Exception as e:
             return False, str(e)
@@ -48,12 +56,12 @@ class VectorStore:
             collection = self.collection
 
         # Проверяем существование коллекции
-        collections = await self.client.get_collections()
+        collections = await self.aclient.get_collections()
         collection_names = {c.name for c in collections.collections}
 
         if collection in collection_names:
             # Проверяем размерность
-            info = await self.client.get_collection(collection)
+            info = await self.aclient.get_collection(collection)
 
             # info.config.params.vectors может быть None — проверяем это сначала
             if info.config and info.config.params and info.config.params.vectors:
@@ -69,7 +77,7 @@ class VectorStore:
 
         # Создаём новую коллекцию
         vectors_config = VectorParams(size=self.dim, distance=distance)
-        await self.client.create_collection(
+        await self.aclient.create_collection(
             collection_name=collection,
             vectors_config=vectors_config,
         )
@@ -87,7 +95,7 @@ class VectorStore:
 
         for field, schema_type in indexes:
             try:
-                await self.client.create_payload_index(
+                await self.aclient.create_payload_index(
                     collection_name=collection,
                     field_name=field,
                     field_schema=schema_type,
@@ -119,7 +127,7 @@ class VectorStore:
             batch = points[start : start + batch_size]
             wait = start + batch_size >= total
 
-            await self.client.upsert(
+            await self.aclient.upsert(
                 collection_name=collection,
                 points=batch,
                 wait=wait,
@@ -138,7 +146,7 @@ class VectorStore:
         if collection is None:
             collection = self.collection
 
-        info = await self.client.get_collection(collection)
+        info = await self.aclient.get_collection(collection)
         return info.points_count
 
     async def search(
@@ -152,7 +160,7 @@ class VectorStore:
         if collection is None:
             collection = self.collection
 
-        result = await self.client.query_points(
+        result = await self.aclient.query_points(
             collection_name=collection,
             query=query_vector,
             limit=top_k,
