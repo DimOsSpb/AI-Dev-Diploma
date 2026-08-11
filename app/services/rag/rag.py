@@ -15,7 +15,7 @@ from app.core.ai.catalog import get_catalog
 from app.core.config import get_settings
 from app.services.rag.rag_embedding import DiplomaEmbedding
 from app.services.rag.rag_llm import RagLLM
-from app.services.vector_store import VectorStore
+from app.services.rag.vector_store import VectorStore
 
 
 def strip_frontmatter(text: str) -> str:

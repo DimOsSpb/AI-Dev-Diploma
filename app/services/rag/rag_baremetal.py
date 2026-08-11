@@ -17,7 +17,7 @@ from app.core.config import get_settings
 from app.services.embeddings.models import EmbeddingModelConfig
 from app.services.embeddings.text_splitter import TextSplitter
 from app.services.embeddings.vectorizer import Vectorizer
-from app.services.vector_store import VectorStore
+from app.services.rag.vector_store import VectorStore
 
 
 def compute_embedding_hash(text: str, source: str, index: int) -> str:

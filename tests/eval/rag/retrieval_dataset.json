@@ -1,0 +1,127 @@
+{
+  "metadata": {
+    "version": "2.0",
+    "created_at": "2026-08-11",
+    "description": "Golden dataset для оценки качества RAG на корпусе Kubernetes документации",
+    "total_questions": 22,
+    "topics": [
+      "architecture",
+      "workloads",
+      "security",
+      "administration"
+    ]
+
+  },
+  "questions": [
+    {
+      "id": 1,
+      "question": "Что такое Service Account в Kubernetes и как он предоставляет доступ к API серверу для подов по умолчанию?",
+      "relevant_doc_ids": ["k8s-00054"]
+    },
+    {
+      "id": 2,
+      "question": "Какие компоненты входят в управляющий слой (control plane) Kubernetes и где хранятся объекты кластера?",
+      "relevant_doc_ids": ["k8s-00072", "k8s-00114"]
+    },
+    {
+      "id": 3,
+      "question": "Как работает garbage collector в Kubernetes и когда удаляет объекты из кластера после удаления ресурса владельца?",
+      "relevant_doc_ids": ["k8s-00032"]
+    },
+    {
+      "id": 4,
+      "question": "Какую задачу выполняет cloud-controller-manager и какие контроллеры зависят от облачного провайдера?",
+      "relevant_doc_ids": ["k8s-00056", "k8s-00117"]
+    },
+    {
+      "id": 5,
+      "question": "Что представляют собой объекты Kubernetes и что такое желаемое состояние кластера?",
+      "relevant_doc_ids": ["k8s-00032", "k8s-00104"]
+    },
+    {
+      "id": 6,
+      "question": "Какие типы имен в Kubernetes должны соответствовать стандарту DNS label names и какие требования к ним предъявляются?",
+      "relevant_doc_ids": ["k8s-00106", "k8s-00104"]
+    },
+    {
+      "id": 7,
+      "question": "Для чего используются пространства имён (namespaces) в Kubernetes и какие префиксы аннотаций для них зарезервированы?",
+      "relevant_doc_ids": ["k8s-00110", "k8s-00119"]
+    },
+    {
+      "id": 8,
+      "question": "Какие операторы можно использовать в селекторах Kubernetes и какие типы сравнения поддерживаются?",
+      "relevant_doc_ids": ["k8s-00109", "k8s-00065"]
+    },
+    {
+      "id": 9,
+      "question": "Как работает таймаут (ttl) для задач типа Job и как работает controller time-to-live after finished?",
+      "relevant_doc_ids": ["k8s-00034", "k8s-00073"]
+    },
+    {
+      "id": 10,
+      "question": "Что такое вытеснение (eviction) в Kubernetes и какие типы завершения работы pod'ов существуют?",
+      "relevant_doc_ids": ["k8s-00095", "k8s-00096"]
+    },
+    {
+      "id": 11,
+      "question": "Какие компоненты узла отвечают за работу подов и как kube-proxy взаимодействует с кластером?",
+      "relevant_doc_ids": ["k8s-00100", "k8s-00112"]
+    },
+    {
+      "id": 12,
+      "question": "Какую информацию можно хранить в аннотациях объектов Kubernetes и как они отличаются от меток?",
+      "relevant_doc_ids": ["k8s-00105"]
+    },
+    {
+      "id": 13,
+      "question": "Что такое DaemonSet в Kubernetes и как он планирует поды на узлах кластера при добавлении нового узла?",
+      "relevant_doc_ids": ["k8s-00102", "k8s-00097"]
+    },
+    {
+      "id": 14,
+      "question": "Для чего используются тейнты (taints) и толерации (tolerations) при распределении pod'ов по узлам?",
+      "relevant_doc_ids": ["k8s-00095", "k8s-00102"]
+    },
+    {
+      "id": 15,
+      "question": "Какую задачу выполняет kube-scheduler при выборе узла для запуска pod'ов в кластере?",
+      "relevant_doc_ids": ["k8s-00072", "k8s-00106"]
+    },
+    {
+      "id": 16,
+      "question": "Какие контроллеры входят в состав kube-controller-manager и что они делают с объектами Kubernetes?",
+      "relevant_doc_ids": ["k8s-00036", "k8s-00114"]
+    },
+    {
+      "id": 17,
+      "question": "Какие встроенные API предоставляет Kubernetes для управления рабочими нагрузками и что такое StatefulSet?",
+      "relevant_doc_ids": ["k8s-00101", "k8s-00097"]
+    },
+    {
+      "id": 18,
+      "question": "Какие требования к именам поддоменов DNS в соответствии с RFC 1123 для большинства типов ресурсов Kubernetes?",
+      "relevant_doc_ids": ["k8s-00106", "k8s-00118"]
+    },
+    {
+      "id": 19,
+      "question": "Что такое unique identifiers (UID) объектов в Kubernetes и какой стандарт их определяет?",
+      "relevant_doc_ids": ["k8s-00104", "k8s-00073"]
+    },
+    {
+      "id": 20,
+      "question": "Для чего используются метки (labels) в Kubernetes и как они отличаются от аннотаций?",
+      "relevant_doc_ids": ["k8s-00104", "k8s-00112"]
+    },
+    {
+      "id": 21,
+      "question": "Какие компоненты управления кластером входят в состав control plane и что делает kube-controller-manager?",
+      "relevant_doc_ids": ["k8s-00072", "k8s-00036", "k8s-00097"]
+    },
+    {
+      "id": 22,
+      "question": "Какую роль играет Service Account в Kubernetes и какой ресурс используется для запуска одноразовой задачи?",
+      "relevant_doc_ids": ["k8s-00054", "k8s-00101"]
+    }
+  ]
+}

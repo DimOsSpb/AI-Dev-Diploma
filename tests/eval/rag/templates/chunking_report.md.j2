@@ -1,0 +1,81 @@
+# Chunking и оптимизация качества
+
+## Цель исследования
+
+Провести сравнение стратегий разбиения документов, подобрать оптимальные параметры
+Chunking и оценить влияние Re-ranker на качество Retrieval.
+
+---
+
+# Исходные данные
+
+| Параметр | Значение |
+|----------|---------:|
+| Документов | {{ report.documents }} |
+| Вопросов | {{ report.questions }} |
+
+---
+
+# 1. Сравнение стратегий Chunking
+
+| Strategy | Chunk Size | Overlap | Top-K | Hit@5 | MRR@10 | Recall@10 |
+|----------|-----------:|--------:|------:|------:|--------:|----------:|
+{% for row in report.chunking %}
+| {{ row.strategy }} | {{ row.config.chunk_size }} | {{ row.config.overlap }} | {{ row.config.top_k }} | {{ "%.3f"|format(row.metrics.hit_rate) }} | {{ "%.3f"|format(row.metrics.mrr) }} | {{ "%.3f"|format(row.metrics.recall) }} |
+{% endfor %}
+
+**Лучшая стратегия**
+
+> {{ report.best_strategy }}
+
+---
+
+# 2. Подбор параметров
+
+| Chunk Size | Overlap | Top-K | Hit@5 | MRR@10 | Recall@10 |
+|------------|---------:|------:|------:|--------:|----------:|
+{% for row in report.tuning %}
+| {{ row.config.chunk_size }} | {{ row.config.overlap }} | {{ row.config.top_k }} | {{ "%.3f"|format(row.metrics.hit_rate) }} | {{ "%.3f"|format(row.metrics.mrr) }} | {{ "%.3f"|format(row.metrics.recall) }} |
+{% endfor %}
+
+---
+
+## Итоговая конфигурация
+
+{% if report.best_config %}
+```text
+chunk_size = {{ report.best_config.chunk_size }}
+overlap    = {{ report.best_config.overlap }}
+top_k      = {{ report.best_config.top_k }}
+````
+
+{% else %}
+Конфигурация не определена.
+{% endif %}
+
+---
+
+# 3. Влияние Re-ranker
+
+| Variant   |     Hit@5 |                                                          MRR@10 | Recall@10 |                                                            |           |                                                               |
+| --------- | --------: | --------------------------------------------------------------: | --------: | ---------------------------------------------------------- | --------- | ------------------------------------------------------------- |
+| Baseline  | {{ "%.3f" | format(report.best_result.metrics.hit_rate) if report.best_result else "—" }} | {{ "%.3f" | format(report.best_result.metrics.mrr) if report.best_result else "—" }} | {{ "%.3f" | format(report.best_result.metrics.recall) if report.best_result else "—" }} |
+| Re-ranker | {{ "%.3f" | format(report.reranker.hit_rate) if report.reranker else "—" }} | {{ "%.3f" | format(report.reranker.mrr) if report.reranker else "—" }} | {{ "%.3f" | format(report.reranker.recall) if report.reranker else "—" }} |
+
+---
+
+# Вывод
+
+По результатам экспериментов лучшей стратегией Chunking выбрана:
+
+> {{ report.best_strategy }}
+
+{% if report.best_config %}
+Итоговая конфигурация:
+
+* Chunk Size: **{{ report.best_config.chunk_size }}**
+* Overlap: **{{ report.best_config.overlap }}**
+* Top-K: **{{ report.best_config.top_k }}**
+  {% endif %}
+
+Re-ranker оценивался отдельным прогоном на лучшей конфигурации Retrieval.

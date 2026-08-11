@@ -89,6 +89,22 @@ class Settings(BaseSettings):
     rag_similarity_top_k: int = Field(default=3)
     rag_score_threshold: float = Field(default=0.5)
 
+    # Chunking experiment settings (Б5.4) - rag_ prefix
+    rag_chunking_strategy: str = Field(
+        default="recursive"
+    )  # fixed, recursive, semantic
+    rag_chunk_size_fixed: int = Field(default=512)
+    rag_chunk_overlap_fixed: int = Field(default=64)
+    rag_chunk_size_recursive: int = Field(default=500)
+    rag_chunk_overlap_recursive: int = Field(default=64)
+    rag_semantic_buffer_size: int = Field(default=1)
+    rag_semantic_breakpoint_threshold: float = Field(default=95.0)
+
+    # Re-ranker settings
+    rag_re_ranker_enabled: bool = Field(default=True)
+    rag_reranker_algorithm: str = Field(default="bge")  # cohere, bge, huggingface
+    rag_reranker_top_n: int = Field(default=3)
+
     # API KEY валидатор
     @staticmethod
     def resolve_secret_path(v: object | None) -> str | None:
