@@ -1,3 +1,4 @@
+import asyncio
 import secrets
 import sys
 import uuid
@@ -84,6 +85,27 @@ async def lifespan(app: FastAPI):
         )
 
     rag = get_rag()
+
+    # Ждём готовности Qdrant перед индексацией
+    logger.app.info("Ожидание готовности Qdrant...")
+    max_retries = 30
+    for attempt in range(max_retries):
+        try:
+            from qdrant_client import QdrantClient
+
+            qdrant_client = QdrantClient(url=settings.qdrant_url)
+            # count() — синхронный метод, не требует await
+            qdrant_client.count(settings.rag_collection)
+            logger.app.info("Qdrant готов")
+            break
+        except Exception as e:
+            logger.app.warning(
+                "Qdrant недоступен (попытка %d/%d): %s", attempt + 1, max_retries, e
+            )
+            await asyncio.sleep(2)
+    else:
+        logger.app.error("Qdrant не стал доступен за %d секунд", max_retries * 2)
+        raise RuntimeError("Qdrant не стал доступен")
 
     await rag.build()
 

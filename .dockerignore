@@ -5,7 +5,7 @@
 .github/
 
 # Python
-__pycache__/
+__pycache__
 *.py[cod]
 *$py.class
 *.so
@@ -40,6 +40,7 @@ htmlcov/
 .venv/
 venv/
 env/
+.uv
 
 # Project
 tests/

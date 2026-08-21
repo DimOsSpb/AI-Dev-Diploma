@@ -11,16 +11,26 @@ SSE-контракт `POST /chats/{chat_id}/messages` (стабильный — 
     data: {"type":"token","delta":"<chunk-of-text>"}\\n\\n
     ...
     data: {"type":"message_saved","message_id":"<uuid>"}\\n\\n
+    data: {"type":"sources","data":[{"file_name":"...","page":...,"score":...,"snippet":"..."}]}\\n\\n
     data: {"type":"done"}\\n\\n
 
 `message_saved` — кадр после сохранения assistant-сообщения в БД, нужен
 боту чтобы прицепить feedback-клавиатуру к финальному send_message.
 `done` всегда последний (и при ошибке — в finally).
+
+ sanitize: все \n внутри delta заменяются на \\n для корректного
+отображения в Telegram (избегаем разрыва строки в процессе стрима).
 """
 
 import json
 from typing import Annotated, Literal
 from uuid import UUID
+
+
+def sanitize_newlines(text: str) -> str:
+    """Заменяет \n на \\n чтобы избежать разрыва строк в Telegram."""
+    return text.replace("\n", "\\n")
+
 
 from fastapi import (
     APIRouter,
@@ -63,6 +73,17 @@ class CreateChatOut(BaseModel):
 class FeedbackIn(BaseModel):
     owner_external_id: str
     value: FeedbackValue  # Pydantic сам провалидирует Literal["up","down"]
+
+
+class RagQueryIn(BaseModel):
+    query: str
+
+
+class RagQueryOut(BaseModel):
+    answer: str
+    top_score: float
+    sources: list[dict]
+    confident: bool
 
 
 @router.post("", response_model=CreateChatOut, summary="Создать чат")
@@ -128,6 +149,12 @@ async def post_message(
                 # service yield-ит уже структурированные dict-события:
                 # {"type":"token","delta":"..."} и
                 # {"type":"message_saved","message_id":"..."}.
+                if event.get("type") == "token":
+                    # sanitize: \n -> \\n для корректного отображения в Telegram
+                    event = {
+                        "type": "token",
+                        "delta": sanitize_newlines(event["delta"]),
+                    }
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         finally:
             yield 'data: {"type":"done"}\n\n'
@@ -156,6 +183,32 @@ async def list_messages(
 async def delete_messages(chat_id: UUID, chat_service: ChatServiceDep) -> dict:
     await chat_service.clear_history(chat_id)
     return {"status": "ok"}
+
+
+@router.post(
+    "",
+    response_model=RagQueryOut,
+    summary="RAG query (синхронный запрос к базе знаний)",
+)
+async def rag_query(
+    body: RagQueryIn,
+    chat_service: ChatServiceDep,
+) -> RagQueryOut:
+    """Синхронный запрос к RAG. Выполняет retrieval -> score-guard -> generation.
+    Возвращает ответ с источниками: answer, top_score, sources, confident.
+    """
+    from app.services.rag import get_rag
+
+    rag_service = get_rag()
+    await rag_service.build()
+
+    response = await rag_service.answer_sync(body.query)
+    return RagQueryOut(
+        answer=response["answer"],
+        top_score=response["top_score"],
+        sources=response["sources"],
+        confident=response["confident"],
+    )
 
 
 @router.post(

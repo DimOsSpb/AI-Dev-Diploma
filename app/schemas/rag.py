@@ -6,9 +6,11 @@ class RAGQueryRequest(BaseModel):
 
 
 class SourceItem(BaseModel):
-    source: str
+    id: int
+    file_name: str
+    page: str | None
     score: float
-    text: str
+    snippet: str
 
 
 class RAGQueryResponse(BaseModel):

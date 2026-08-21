@@ -12,7 +12,7 @@ from qdrant_client.models import Distance, PointStruct
 
 from app.services.embeddings.models import EmbeddingModelConfig
 from app.services.embeddings.vectorizer import Vectorizer
-from app.services.vector_store import VectorStore
+from app.services.rag.vector_store import VectorStore
 
 QUERIES = [
     "Почему pod постоянно перезапускается?",

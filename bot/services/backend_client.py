@@ -79,7 +79,32 @@ class BackendClient:
             headers={"X-Owner-External-Id": owner_external_id},
         )
         r.raise_for_status()
-        return UUID(r.json()["chat_id"])
+        return UUID(r.json()["chat_id"])  # type: ignore[return-value]
+
+    async def get_chat_by_owner(
+        self,
+        owner_external_id: str,
+        interface: str,
+    ) -> UUID | None:
+        """GET /chats/{id} — получить чат по owner_external_id + interface.
+
+        Ищет существующий чат, не создаёт новый. Если нет — возвращает None.
+        """
+        # Ищем через пост (backend должен поддерживать поиск по owner)
+        r = await self._make_request(
+            "POST",
+            "/chats",
+            json={
+                "owner_external_id": owner_external_id,
+                "interface": interface,
+                "only_existing": True,
+            },
+            headers={"X-Owner-External-Id": owner_external_id},
+        )
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        return UUID(r.json()["chat_id"])  # type: ignore[return-value]
 
     async def send_message(
         self,
@@ -170,6 +195,29 @@ class BackendClient:
             "POST",
             f"/chats/{chat_id}/messages/{message_id}/feedback",
             json={"owner_external_id": owner_external_id, "value": value},
+            headers={"X-Owner-External-Id": owner_external_id},
+        )
+        r.raise_for_status()
+
+    # --- handoff --------------------------------------------------------
+    async def set_handoff_status(
+        self,
+        owner_external_id: str,
+        interface: str,
+        status: str,
+    ) -> None:
+        """POST /notify — уведомить backend о handoff статусе.
+
+        Backend отправит подтверждение через POST /notify внутри handoff-route.
+        """
+        r = await self._make_request(
+            "POST",
+            "/notify",
+            json={
+                "owner_external_id": owner_external_id,
+                "interface": interface,
+                "status": status,
+            },
             headers={"X-Owner-External-Id": owner_external_id},
         )
         r.raise_for_status()

@@ -11,7 +11,7 @@ from qdrant_client.models import Filter
 
 from app.services.embeddings.models import EmbeddingModelConfig
 from app.services.embeddings.vectorizer import Vectorizer
-from app.services.vector_store import VectorStore
+from app.services.rag.vector_store import VectorStore
 
 QUERIES = [
     "Что такое Kube-proxy?",

@@ -13,6 +13,8 @@ from app.chat.repository import ChatRepository
 from app.chat.service import ChatService
 from app.core.config import get_settings
 from app.deps.providers import LLMDep, SessionFactoryDep
+from app.services.rag import get_rag
+from app.services.rag.rag import RAGService
 
 
 async def get_repository(
@@ -43,16 +45,28 @@ async def get_repository(
 RepositoryDep = Annotated[ChatRepository, Depends(get_repository)]
 
 
-def get_chat_service(
+async def get_rag_service_dep() -> AsyncIterator:
+    """Ленивая зависимость от RAG-сервиса."""
+    rag = get_rag()
+    await rag.build()
+    yield rag
+
+
+RagServiceDep = Annotated["RAGService", Depends(get_rag_service_dep)]
+
+
+async def get_chat_service(
     repo: RepositoryDep,
     llm: LLMDep,
     session_factory: SessionFactoryDep,
+    rag_service: RagServiceDep,
 ) -> ChatService:
     settings = get_settings()
 
     return ChatService(
         repository=repo,
         llm_client=llm,
+        rag_service=rag_service,
         context_window=settings.chat_context_window,
         default_model=settings.llm.default_model,
     )

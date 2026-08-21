@@ -16,6 +16,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-install-project --no-dev
 
+# Копируем bot/ и app/ (нужен для BackendClient)
+COPY bot/ ./bot/
 COPY app/ ./app/
 COPY migrations/ ./migrations/
 COPY alembic.ini pyproject.toml uv.lock ./
@@ -30,14 +32,13 @@ RUN useradd --create-home --uid 1000 appuser
 
 WORKDIR /app
 
-
-# 1. Копируем ТОЛЬКО чистое виртуальное окружение со всеми зависимостями
+# 1. Копируем виртуальное окружение
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 
-# 2. Копируем ТОЛЬКО необходимые файлы кода, отсекая скрытый кэш сборщика
+# 2. Копируем только необходимые файлы
+COPY --chown=appuser:appuser bot/ ./bot/
 COPY --chown=appuser:appuser app/ ./app/
 COPY --chown=appuser:appuser migrations/ ./migrations/
-COPY --chown=appuser:appuser scripts/ ./scripts/
 COPY --chown=appuser:appuser alembic.ini pyproject.toml ./
 
 ENV PATH="/app/.venv/bin:$PATH" \
@@ -45,11 +46,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 
 USER appuser
-EXPOSE 8000
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request,sys; \
-sys.exit(0) if urllib.request.urlopen('http://localhost:8000/ready', timeout=3).status == 200 else sys.exit(1)" \
+sys.exit(0) if urllib.request.urlopen('http://localhost:8080/ready', timeout=3).status == 200 else sys.exit(1)" \
     || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "bot.docker_entrypoint"]

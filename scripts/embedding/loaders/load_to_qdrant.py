@@ -25,7 +25,7 @@ from app.core.config import get_settings
 from app.services.embeddings.models import EmbeddingModelConfig
 from app.services.embeddings.text_splitter import TextSplitter
 from app.services.embeddings.vectorizer import Vectorizer
-from app.services.vector_store import VectorStore
+from app.services.rag.vector_store import VectorStore
 
 # -------------------------
 # CONFIG
@@ -46,7 +46,7 @@ QDRANT_URL = settings.qdrant_url
 #     settings.qdrant_api_key.get_secret_value() if settings.qdrant_api_key else None
 # )
 
-QDRANT_COLLECTION = settings.qdrant_collection
+QDRANT_COLLECTION = settings.rag_collection
 
 
 import uuid

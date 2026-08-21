@@ -70,7 +70,7 @@ models:
 
       llama.cpp:
 
-        api_model: Qwen3.5-9B-Q8_0
+        api_model: Qwen3.5-9B-Q5_K_M
 
 
 
@@ -179,3 +179,25 @@ models:
       llama.cpp:
 
         api_model: BAAI/bge-m3-Q8_0
+
+  # --------------------------------------------------------------------------
+  # Reranker
+  # --------------------------------------------------------------------------
+
+  bge-reranker-v2-m3:
+
+    description: "Reranker model"
+
+    type:
+      - reranker
+
+    dimensions: 0
+
+    normalize: false
+
+
+    endpoints:
+
+      llama.cpp:
+
+        api_model: bge-reranker-v2-m3

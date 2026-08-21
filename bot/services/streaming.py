@@ -39,9 +39,16 @@ def _to_tg_markdown(text: str) -> str:
     Telegram парсит свой MarkdownV2 (требует эскейпа `.`, `-`, `(`, `)`, ...).
     `telegramify-markdown` делает конвертацию и эскейп.
     """
+    text = text.replace("\\n", "\n")
+    text = text.replace("\\\\n", "\n")
     try:
         return telegramify_markdown.markdownify(text)
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        print(f"### - {text}")
+        log.warning(
+            "markdownify: %s",
+            str(e),
+        )
         # На любую ошибку конвертации — отдаём текст как есть; парсер Telegram
         # на это вернёт ошибку, и мы упадём в fallback без parse_mode.
         return text

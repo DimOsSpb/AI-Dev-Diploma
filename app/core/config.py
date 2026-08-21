@@ -1,11 +1,29 @@
+import logging
 from collections.abc import Iterator
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from pydantic.types import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def validate_log_level(v: str | int) -> int:
+    if isinstance(v, str):
+        # Получаем актуальную карту уровней, например: {"INFO": 20, "DEBUG": 10...}
+        level_mapping = logging.getLevelNamesMapping()
+        upper_str = v.upper()
+
+        if upper_str in level_mapping:
+            return level_mapping[upper_str]
+
+        raise ValueError(f"Неверный уровень логирования: {v}")
+    return v
+
+
+# Создаем валидируемый тип данных
+LogLevel = Annotated[int, BeforeValidator(validate_log_level)]
 
 
 def iter_fields(obj: BaseModel, prefix: str = "") -> Iterator[tuple[object, str]]:
@@ -51,11 +69,13 @@ class Settings(BaseSettings):
         env_file=(".env"),
         extra="ignore",
     )
+    log_level: LogLevel = Field(default=logging.INFO)
     service_name: str = Field(default="Undefined")
     # Основной провайдер (OpenAI-совместимый API)
     llm: LLMSettings = Field(default_factory=LLMSettings)
 
     # Общие настройки
+    backend_url: str = Field(default="http://localhost:8000")
     request_timeout: int = Field(default=30)
     max_retries: int = Field(default=3)
 
@@ -74,7 +94,7 @@ class Settings(BaseSettings):
     # Qdrant vector store settings
     qdrant_url: str = Field(default="http://localhost:6333")
     qdrant_api_key: SecretStr | None = Field(default=None)
-    qdrant_collection: str = Field(default="documents")
+    # qdrant_collection: str = Field(default="documents")
     embedding_dim: int = Field(default=1536)  # text-embedding-3-small dimension
     embedding_model: str = Field(default="")
     embedding_endpoint: str = Field(default="")
@@ -82,12 +102,12 @@ class Settings(BaseSettings):
 
     rag_llm_model: str = Field(default="")
     rag_llm_endpoint: str = Field(default="")
-    rag_collection: str = Field(default="rag_block_03")
+    rag_collection: str = Field(default="collection")
     rag_data_dir: str = Field(default="data/rag-block-03")
     rag_chunk_size: int = Field(default=512)
     rag_chunk_overlap: int = Field(default=64)
     rag_similarity_top_k: int = Field(default=3)
-    rag_score_threshold: float = Field(default=0.5)
+    rag_score_threshold: float = Field(default=0.3)
 
     # Chunking experiment settings (Б5.4) - rag_ prefix
     rag_chunking_strategy: str = Field(
@@ -100,10 +120,21 @@ class Settings(BaseSettings):
     rag_semantic_buffer_size: int = Field(default=1)
     rag_semantic_breakpoint_threshold: float = Field(default=95.0)
 
+    rag_retrieve_top_k: int = Field(default=5)
     # Re-ranker settings
-    rag_re_ranker_enabled: bool = Field(default=True)
+    rag_reranker_enabled: bool = Field(default=True)
+    hf_token: str | None = Field(default=None)
+    rag_reranker_endpoint: str = Field(default="")
+    rag_reranker_model: str = Field(default="")
     rag_reranker_algorithm: str = Field(default="bge")  # cohere, bge, huggingface
     rag_reranker_top_n: int = Field(default=3)
+
+    rag_sparse_model: str | None = Field(default=None)
+    rag_restrict_to_internal: bool = Field(default=False)
+    rag_use_hybrid: bool = Field(default=False)
+
+    bot_token: str = Field(default="")
+    internal_token: str = Field(default="")
 
     # API KEY валидатор
     @staticmethod

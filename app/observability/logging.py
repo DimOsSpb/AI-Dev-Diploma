@@ -11,12 +11,32 @@ class Loggers:
     json_repo = logging.getLogger("llm-service.chat.json_repo")
     settings = get_settings()
 
-    logging.basicConfig(
-        filename=settings.log_path,
-        encoding="utf-8",
-        level="INFO",
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    # Консольный handler для отладки
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_formatter = logging.Formatter(
+        "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
+    console_handler.setFormatter(console_formatter)
+
+    # Файловый handler (если log_path указан)
+    if settings.log_path:
+        file_handler = logging.FileHandler(settings.log_path, encoding="utf-8")
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(console_formatter)
+        app.addHandler(file_handler)
+
+    # Добавляем console handler для app логгера
+    app.addHandler(console_handler)
+
+    # Добавляем console handler для root логгера (чтобы все логи выводились)
+    root_logger = logging.getLogger()
+    root_logger.addHandler(console_handler)
+    root_logger.setLevel(logging.INFO)
+
+    # Установим уровень логирования
+    logging.getLogger().setLevel(settings.log_level)
 
     structlog.configure(
         processors=[

@@ -59,9 +59,10 @@ else:
     asyncio.run(run_migrations_online())
 ```
 4. Временно сделаем доступной postgresql пробросим порт на localhost:5432
-5. Создаем миграцию
+5. Создаем миграцию и применим ее
 ```bash
 alembic revision --autogenerate -m "Initial migration"
+alembic upgrade head
 ```
 6. Накатить базу в контейнер после build app image
 ```bash

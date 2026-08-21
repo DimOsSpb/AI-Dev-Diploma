@@ -1,4 +1,5 @@
 services:
+
   app:
     build:
       context: .
@@ -12,6 +13,7 @@ services:
       - .env
     volumes:
       - ./var/cache/embeddings:/var/cache/embeddings
+      - ./data:/app/data
     environment:
       EMBEDDING_CACHE_PATH: "/var/cache/embeddings"
       REDIS_URL: redis://redis:6379/0
@@ -34,9 +36,9 @@ services:
         - -c
         - "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/ready', timeout=3).status == 200 else sys.exit(1)"
       interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 5m
 
   redis:
     image: redis:7.4-alpine
@@ -105,9 +107,28 @@ services:
       test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 60s
 
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    image: telegram-bot:dev
+    container_name: telegram-bot
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - BOT_API_PORT=8080
+      - BACKEND_URL=http://app:8000
+      - BOT_TOKEN=${BOT_TOKEN}
+      - INTERNAL_TOKEN=${INTERNAL_TOKEN}
+    depends_on:
+      app:
+        condition: service_healthy
 
 volumes:
   redis_data:

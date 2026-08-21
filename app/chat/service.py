@@ -30,11 +30,13 @@ class ChatService:
         self,
         repository: ChatRepository,
         llm_client,
+        rag_service=None,
         context_window: int = 10,
         default_model: str = "gpt-4o-mini",
     ):
         self.repository = repository
         self.llm_client = llm_client
+        self.rag_service = rag_service
         self.context_window = context_window
         self.default_model = default_model
 
@@ -177,31 +179,73 @@ class ChatService:
         )
         messages = self._build_context(chat, history)
 
-        # 6. Стримим
+        # 6. RAG + стриминг
         buffer = ""
-        stream = await self.llm_client.chat.completions.create(
-            model=self.default_model,
-            messages=messages,
-            stream=True,
-            stream_options={"include_usage": True},
-        )
+        if self.rag_service is not None:
+            # RAG стримит события: token, message_saved, sources, done
+            async for event in self.rag_service.answer(user_content):
+                if event["type"] == "token":
+                    buffer += event["delta"]
+                    yield {"type": "token", "delta": event["delta"]}
+                elif event["type"] in ("message_saved", "sources"):
+                    yield event
+                elif event["type"] == "done":
+                    # Добавляем done после всех событий
+                    yield {"type": "done"}
+                    break
 
-        try:
-            async for chunk in stream:
-                if not getattr(chunk, "choices", None):
-                    continue
-                delta = chunk.choices[0].delta
-                content = getattr(delta, "content", None)
-                if content:
-                    buffer += content
-                    yield {"type": "token", "delta": content}
-        except Exception as exc:
-            logger.warning(
-                "stream interrupted chat_id=%s err=%s saved_chars=%d",
-                chat_id,
-                exc,
-                len(buffer),
+            # RAG уже сохранил ответ и yield'ил message_saved
+            # Просто сохраняем ответ в БД
+            if buffer:
+                assistant_msg = ChatMessage(
+                    chat_id=chat_id,
+                    role="assistant",
+                    content=buffer,
+                )
+                await self.repository.append_message(chat_id, assistant_msg)
+        else:
+            # Fallback на прямой LLM через chat.completions
+            buffer = ""
+            stream = await self.llm_client.chat.completions.create(
+                model=self.default_model,
+                messages=messages,
+                stream=True,
+                stream_options={"include_usage": True},
             )
+
+            try:
+                async for chunk in stream:
+                    if not getattr(chunk, "choices", None):
+                        continue
+                    delta = chunk.choices[0].delta
+                    content = getattr(delta, "content", None)
+                    if content:
+                        buffer += content
+                        yield {"type": "token", "delta": content}
+            except Exception as exc:
+                logger.warning(
+                    "stream interrupted chat_id=%s err=%s saved_chars=%d",
+                    chat_id,
+                    exc,
+                    len(buffer),
+                )
+                if buffer:
+                    saved = await self.repository.append_message(
+                        chat_id,
+                        ChatMessage(
+                            chat_id=chat_id,
+                            role="assistant",
+                            content=buffer,
+                        ),
+                    )
+                    yield {
+                        "type": "message_saved",
+                        "message_id": str(saved.id),
+                    }
+                yield {"type": "done"}
+                raise
+
+            # Успешное завершение — сохраняем накопленный ответ
             if buffer:
                 saved = await self.repository.append_message(
                     chat_id,
@@ -215,19 +259,3 @@ class ChatService:
                     "type": "message_saved",
                     "message_id": str(saved.id),
                 }
-            raise
-
-        # 7. Успешное завершение — сохраняем накопленный ответ
-        if buffer:
-            saved = await self.repository.append_message(
-                chat_id,
-                ChatMessage(
-                    chat_id=chat_id,
-                    role="assistant",
-                    content=buffer,
-                ),
-            )
-            yield {
-                "type": "message_saved",
-                "message_id": str(saved.id),
-            }

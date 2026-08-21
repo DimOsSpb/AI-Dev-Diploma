@@ -19,6 +19,8 @@
 | Chunk size | 512 |
 | Chunk overlap | 64 |
 | Similarity top-k | 3 |
+| Reranker top-k | 5 |
+| Reranker threshold | 0.25 |
 | Коллекция LlamaIndex | rag_block_03 |
 
 ---
@@ -63,6 +65,51 @@ rag_block_03
 Коллекция из блока 5.2 заполнялась напрямую через `qdrant-client` и содержит плоский payload. LlamaIndex сохраняет документы в собственном формате (`_node_content`), который необходим для корректной работы `source_nodes`, цитирования источников и восстановления метаданных.
 
 Поэтому для LlamaIndex используется отдельная коллекция, индексируемая непосредственно через `VectorStoreIndex`.
+
+---
+
+## Архитектура RAG
+
+```mermaid
+flowchart TB
+    subgraph Ingestion["1. Индексация документов"]
+        A[Markdown файлы]
+        B[Разбиение на чанки]
+        C[Эмбеддинги]
+        D[(Qdrant)]
+    end
+
+    subgraph Query["2. Обработка запроса"]
+        E[Вопрос пользователя]
+        F[Поиск по векторам]
+        G[Reranking]
+        H[Фильтр релевантности]
+        I[Формирование контекста]
+        J[LLM-ответ]
+    end
+
+    subgraph Output["3. Ответ клиенту"]
+        K[СSE-стрим]
+        L[Цитаты источников]
+    end
+
+    A --> B
+    B --> C
+    C --> D
+
+    E --> F
+    F --> G
+    G --> H
+    H -->|score >= 0.25| I
+    H -->|score < 0.25| M["Нет релевантного ответа"]
+    I --> J
+    J --> K
+    K --> L
+
+    D -.поиск.-> F
+    style H fill:#ff9999
+    style M fill:#99ff99
+```
 
 ---
 

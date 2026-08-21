@@ -23,7 +23,7 @@ class VectorStore:
         if collection:
             self.collection = collection
         else:
-            self.collection = self.settings.qdrant_collection
+            self.collection = self.settings.rag_collection
         if dim:
             self.dim = dim
         else:

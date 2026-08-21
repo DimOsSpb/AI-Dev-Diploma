@@ -7,7 +7,7 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -34,9 +34,7 @@ class ChatMessageRow(Base):
     __tablename__ = "chat_messages"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    chat_id: Mapped[UUID] = mapped_column(
-        ForeignKey("chats.id", ondelete="CASCADE")
-    )
+    chat_id: Mapped[UUID] = mapped_column(ForeignKey("chats.id", ondelete="CASCADE"))
     role: Mapped[str]
     content: Mapped[str]
     media_refs: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
@@ -45,9 +43,7 @@ class ChatMessageRow(Base):
     created_at: Mapped[datetime] = mapped_column(
         TimestampTZ, default=lambda: datetime.now(UTC)
     )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        TimestampTZ, nullable=True
-    )
+    deleted_at: Mapped[datetime | None] = mapped_column(TimestampTZ, nullable=True)
 
 
 class SystemPromptRow(Base):
@@ -60,4 +56,19 @@ class SystemPromptRow(Base):
     traffic_pct: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(
         TimestampTZ, default=lambda: datetime.now(UTC)
+    )
+
+
+class MessageFeedbackRow(Base):
+    __tablename__ = "message_feedback"
+
+    message_id: Mapped[UUID] = mapped_column(primary_key=True)
+    owner_external_id: Mapped[str] = mapped_column(nullable=False)
+    value: Mapped[str] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TimestampTZ, default=lambda: datetime.now(UTC)
+    )
+
+    __table_args__ = (
+        UniqueConstraint("owner_external_id", "message_id", name="uq_owner_message"),
     )

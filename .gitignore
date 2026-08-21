@@ -6,5 +6,6 @@ __pycache__/
 .python*
 .zed
 .rules
+.agent
 var/
 scripts/embedding/kb-builder/source
