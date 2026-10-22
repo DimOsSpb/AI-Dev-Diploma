@@ -98,10 +98,12 @@ class Settings(BaseSettings):
     embedding_dim: int = Field(default=1536)  # text-embedding-3-small dimension
     embedding_model: str = Field(default="")
     embedding_endpoint: str = Field(default="")
+
     embedding_cache_path: Path | None = Field(default=None)
 
     rag_llm_model: str = Field(default="")
     rag_llm_endpoint: str = Field(default="")
+
     rag_collection: str = Field(default="collection")
     rag_data_dir: str = Field(default="data/rag-block-03")
     rag_chunk_size: int = Field(default=512)

@@ -1,13 +1,15 @@
 # Project instructions
 
+Do not prepend the repository directory name to a path unless the tool explicitly requires it
+
+## Current task
+
+read in current opened repository - '.agent/task.md'
+
 ## Goal
 
 Complete the current assignment using the existing repository.
 Prefer modifying the existing architecture over introducing new abstractions.
-
-## Autonomous mode
-
-Work autonomously.
 
 Do NOT ask the user for permission to:
 - read files
@@ -219,3 +221,4 @@ Final response should contain only:
 1. what was changed
 2. checks executed
 3. remaining problems, if any
+4. Answer me in Russian language
