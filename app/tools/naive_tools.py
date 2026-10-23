@@ -3,18 +3,71 @@
 Здесь живут три инструмента, словарь-allowlist `DISPATCH` и список `TOOLS`
 с описаниями в формате OpenAI Chat Completions. Агент (`agent_naive.run_agent`)
 импортирует `TOOLS` и `DISPATCH` отсюда и сам не знает деталей реализации.
+
+Также содержатся тестовые задачи для сравнения агентов.
 """
 
 from datetime import datetime
+from typing import Any
 from zoneinfo import ZoneInfo
+
+# Тестовые задачи для сравнения agent_naive и agent_react
+TASKS: list[dict[str, Any]] = [
+    {
+        "id": 1,
+        "name": "Простая: K8S - что это",
+        "description": "K8S - что это?",
+        "expected_contains": ["Kubernetes"],
+        "expected_not_contains": ["Linux", "Proxmox"],
+        "complexity": "simple",
+        "requires_tools": ["search_knowledge_base"],
+    },
+    {
+        "id": 2,
+        "name": "Простая: поддержка систем",
+        "description": "Какие системы поддерживает сервис?",
+        "expected_contains": ["Linux", "Kubernetes", "Proxmox"],
+        "expected_not_contains": [],
+        "complexity": "simple",
+        "requires_tools": ["search_knowledge_base"],
+    },
+    {
+        "id": 3,
+        "name": "Средняя: время + статус",
+        "description": "Какое сейчас время в Москве и какой статус сервиса k8s?",
+        "expected_contains": ["врем", "статус"],
+        "expected_not_contains": [],
+        "complexity": "medium",
+        "requires_tools": ["get_current_time", "get_status"],
+    },
+    {
+        "id": 4,
+        "name": "Средняя: статус + отправить уведомление",
+        "description": "Проверь текущий статус сервиса и отправь сообщение в Telegram, что всё ок.",
+        "expected_contains": ["статус", "сообщ"],
+        "expected_not_contains": [],
+        "complexity": "medium",
+        "requires_tools": ["get_status", "send_telegram_message"],
+    },
+    {
+        "id": 5,
+        "name": "Провокационная: вопрос без инструментов",
+        "description": "Сколько букв в слове 'привет'?",
+        "expected_contains": ["6", "шесть"],
+        "expected_not_contains": ["инструмент", "база знаний", "не знаю"],
+        "complexity": "provocative",
+        "requires_tools": [],
+    },
+]
+
 
 # Заглушка базы знаний. В дипломном проекте здесь будет вызов
 # app/services/rag.py (поиск top-1 фрагмента по реальной коллекции).
 _KNOWLEDGE_BASE: dict[str, str] = {
-    "cервис поддерживает": "Сервис поддерживает Linux, Kubernetes (K8s) и Proxmox.",
-    "статус": "Статус сервиса - оптимальный.",
-    "R8S": "Сокращенное название Kubernetes.",
-    "Linux": "Операционная система с открытым кодом.",
+    "сервис": "Сервис поддерживает Linux, Kubernetes (K8s) и Proxmox.",
+    "proxmox": "Платформа виртуализации.",
+    "k8s": "Сокращенное название Kubernetes.",
+    "linux": "Операционная система с открытым кодом.",
 }
 
 
@@ -33,6 +86,11 @@ def get_current_time(timezone: str = "Europe/Moscow") -> str:
     return now.isoformat()
 
 
+def get_status(dest: str = "all") -> str:
+    """Текущий статус сервиса"""
+    return "Оптимальный"
+
+
 def send_telegram_message(chat_id: str, text: str) -> str:
     """Отправка сообщения клиенту в Telegram (в этом задании — заглушка)."""
     print(f"[TELEGRAM → {chat_id}] {text}")
@@ -45,6 +103,7 @@ DISPATCH = {
     "search_knowledge_base": search_knowledge_base,
     "get_current_time": get_current_time,
     "send_telegram_message": send_telegram_message,
+    "get_status": get_status,
 }
 
 # Описания инструментов для Chat Completions. От качества description
@@ -55,7 +114,7 @@ TOOLS = [
         "function": {
             "name": "search_knowledge_base",
             "description": (
-                "Ищет ответ во внутренней базе знаний компании: Ответы на вопросы по предметным областям: Linux, Kubernetes, Proxmox "
+                "Ищет ответ во внутренней базе знаний компании: ответы на профильные вопросы."
             ),
             "parameters": {
                 "type": "object",
@@ -75,7 +134,8 @@ TOOLS = [
             "name": "get_current_time",
             "description": (
                 "Возвращает текущие дату и время в указанном часовом поясе в формате "
-                "ISO 8601. Вызывай, когда нужно знать текущее время."
+                "ISO 8601. Вызывай, когда нужно знать текущее время, например для "
+                "расчёта сроков возврата или доставки."
             ),
             "parameters": {
                 "type": "object",
@@ -84,6 +144,24 @@ TOOLS = [
                         "type": "string",
                         "description": "Имя часового пояса IANA, например Europe/Moscow",
                         "default": "Europe/Moscow",
+                    }
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_status",
+            "description": ("Возвращает текущий статус сервиса."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "dest": {
+                        "type": "string",
+                        "description": "Наименование сервиса",
+                        "default": "all",
                     }
                 },
                 "required": [],

@@ -1,13 +1,8 @@
 # Project instructions
 
-Do not prepend the repository directory name to a path unless the tool explicitly requires it
-
-## Current task
-
-read in current opened repository - '.agent/task.md'
-
 ## Goal
 
+The paths must NOT start with the name of the project's root directory.
 Complete the current assignment using the existing repository.
 Prefer modifying the existing architecture over introducing new abstractions.
 
@@ -31,6 +26,10 @@ Only ask the user a question when:
 Do not stop after inspecting files.
 Do not merely describe what should be done.
 After understanding the relevant code, implement the solution.
+
+## Current task
+
+read in current opened repository - '.agent/task.md'
 
 ## Persistent task state
 
