@@ -45,6 +45,8 @@ class LLMSettings(BaseSettings):
         env_file=(".env"),
         extra="ignore",
     )
+    endpoint: str = Field(default="")
+    model: str = Field(default="")
     api_key: SecretStr = SecretStr("")
     url: str = Field(default="")
     default_model: str = Field(default="")

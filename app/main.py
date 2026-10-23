@@ -16,6 +16,7 @@ from structlog.contextvars import (
 )
 
 from app.chat.routes import router as chat_router
+from app.core.ai.catalog import get_catalog
 from app.core.config import MissingEnvVarsError, get_settings
 from app.core.exceptions import (
     LLMAuthError,
@@ -25,7 +26,7 @@ from app.core.exceptions import (
     LLMTimeoutError,
 )
 from app.observability.logging import logger
-from app.routers import chat, health, models, rag
+from app.routers import agent, chat, health, models, rag
 from app.services.rag import get_rag
 from app.services.security.exceptions import (
     SecurityInputViolation,
@@ -84,6 +85,7 @@ async def lifespan(app: FastAPI):
             e,
         )
 
+    app.state.rag_service = None
     rag = get_rag()
 
     # Ждём готовности Qdrant перед индексацией
@@ -108,6 +110,50 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("Qdrant не стал доступен")
 
     await rag.build()
+    app.state.rag_service = rag
+
+    # Агентный слой (LangGraph): ReAct-граф поверх RAG как инструмента.
+    # Импорт ленивый — langgraph/langchain не нужны тестам без lifespan.
+    app.state.agent_graph = None
+    try:
+        from langchain_openai import ChatOpenAI
+
+        from app.agents.graph import build_custom_graph
+        from app.agents.tools import build_search_knowledge_base, multiply
+
+        catalog = get_catalog()
+
+        config = catalog.get_client_config(
+            model_name=settings.llm.model,
+            endpoint_name=settings.llm.endpoint,
+        )
+
+        api_key = "None"
+        if config.api_key:
+            api_key = config.api_key.get_secret_value()
+
+        agent_model = ChatOpenAI(
+            base_url=config.url,
+            model=config.model,
+            temperature=0,
+            timeout=settings.llm.request_timeout,
+            api_key=api_key,  # pyright: ignore[reportArgumentType]
+        )
+
+        async def _search_kb(query: str) -> dict:
+            if app.state.rag_service is None:
+                return {
+                    "answer": "База знаний недоступна.",
+                    "sources": [],
+                    "confident": False,
+                }
+            return await app.state.rag_service.answer(query)
+
+        agent_tools = [multiply, build_search_knowledge_base(_search_kb)]
+        app.state.agent_graph = build_custom_graph(agent_model, agent_tools)
+        logger.app.info("Агентный граф собран (%d инструмента)", len(agent_tools))
+    except Exception as e:
+        logger.app.warning("Агентный граф не собран (%s) — /agent/chat вернёт 503", e)
 
     yield
 
@@ -244,3 +290,4 @@ app.include_router(health.router)
 app.include_router(models.router)
 app.include_router(chat_router)
 app.include_router(rag.router)
+app.include_router(agent.router)

@@ -29,31 +29,22 @@ After understanding the relevant code, implement the solution.
 
 ## Current task
 
-read in current opened repository - '.agent/task.md'
+We are working in the current open repository. 
+To solve the task, follow the instructions of '.agent/task.md' carefully. 
 
 ## Persistent task state
 
-`.agent/TASK_STATE.md` is the persistent state of the implementation.
+`.agent/TASK_STATE.md' is your permanent memory, the status of the task implementation.
 
 At the beginning of work:
-- read `.agent/TASK_STATE.md`;
-- continue from `Current task`;
-- do not rediscover completed work.
+- read ".agent/TASK_STATE.md";
+- continue with the `Current task`;
+- do not reopen completed work.
 
-After completing a logical implementation block:
+After completing the logical implementation block:
 - update `.agent/TASK_STATE.md`;
-- mark completed requirements;
-- record only important architectural decisions;
-- record relevant files;
-- record the latest verification result;
-- set the next concrete task.
-
-Do NOT update TASK_STATE.md after every tool call or small edit.
-
-Keep TASK_STATE.md short.
-It is a state snapshot, not a diary.
-
-Never write model reasoning, conversation history, or verbose explanations into it.
+- mark the completed requirements;
+- briefly record important information for further work;  
 
 ## Repository exploration
 
