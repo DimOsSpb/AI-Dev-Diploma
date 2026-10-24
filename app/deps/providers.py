@@ -4,6 +4,7 @@ from fastapi import Depends, Request
 
 from app.core.config import Settings, get_settings
 from app.services.llm import LLMService
+from app.services.rag.vector_store import VectorStore
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
@@ -23,6 +24,19 @@ def get_session_factory(request: Request) -> Any:
     return request.app.state.session_factory
 
 
+def get_vector_store(request: Request) -> VectorStore | None:
+    """Vector-store, инициализированный в lifespan. None — если Qdrant
+    был недоступен на старте: роут должен решить, что делать (503 или
+    fallback на чистый LLM-ответ без retrieval)."""
+    return request.app.state.vector_store
+
+
+def get_ingestion_service(request: Request) -> Any:
+    """Индексатор корпуса (офлайн-контур), собранный в lifespan. None — если
+    Qdrant был недоступен на старте: ручки /documents отдают 503."""
+    return request.app.state.ingestion_service
+
+
 def get_rag_service(request: Request) -> Any:
     """RAG-сервис на LlamaIndex, собранный один раз в lifespan. None — если
     Qdrant/индекс был недоступен на старте: роут отдаёт 503."""
@@ -38,6 +52,8 @@ def get_agent_graph(request: Request) -> Any:
 LLMDep = Annotated[Any, Depends(get_llm)]
 CacheDep = Annotated[object, Depends(get_cache)]
 SessionFactoryDep = Annotated[Any, Depends(get_session_factory)]
+VectorStoreDep = Annotated[VectorStore | None, Depends(get_vector_store)]
+IngestionServiceDep = Annotated[Any, Depends(get_ingestion_service)]
 RAGServiceDep = Annotated[Any, Depends(get_rag_service)]
 AgentGraphDep = Annotated[Any, Depends(get_agent_graph)]
 

@@ -17,7 +17,7 @@ services:
     environment:
       EMBEDDING_CACHE_PATH: "/var/cache/embeddings"
       REDIS_URL: redis://redis:6379/0
-      PHOENIX_COLLECTOR_ENDPOINT: http://phoenix:4317
+      PHOENIX_COLLECTOR_ENDPOINT: http://phoenix:6006/v1/traces
       DATABASE_URL: postgresql+asyncpg://chat:chat@postgres:5432/chat
     depends_on:
       redis:

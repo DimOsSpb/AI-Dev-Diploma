@@ -137,8 +137,19 @@ class Settings(BaseSettings):
     rag_restrict_to_internal: bool = Field(default=False)
     rag_use_hybrid: bool = Field(default=False)
 
+    phoenix_enabled: bool = False
+    phoenix_collector_endpoint: str = "http://localhost:6006/v1/traces"
+
     bot_token: str = Field(default="")
     internal_token: str = Field(default="")
+
+    # Агент и чекпоинтер -------------------------------------------------
+    # Бэкенд персистентности графа: memory (unit-тесты) | sqlite (локальная
+    # разработка) | postgres (docker-compose). Схему checkpoint-таблиц ведёт
+    # setup() чекпоинтера, доменную — Alembic (checkpoint* исключены в env.py).
+    agent_checkpointer: Literal["memory", "sqlite", "postgres"] = "sqlite"
+    # Файл SQLite-чекпоинтера при agent_checkpointer="sqlite".
+    agent_sqlite_path: str = "var/agent_checkpoints.sqlite"
 
     # API KEY валидатор
     @staticmethod

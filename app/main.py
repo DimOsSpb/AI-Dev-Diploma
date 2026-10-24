@@ -3,7 +3,7 @@ import secrets
 import sys
 import uuid
 from collections.abc import Callable
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -27,7 +27,6 @@ from app.core.exceptions import (
 )
 from app.observability.logging import logger
 from app.routers import agent, chat, health, models, rag
-from app.services.rag import get_rag
 from app.services.security.exceptions import (
     SecurityInputViolation,
     SecurityOutputViolation,
@@ -51,7 +50,7 @@ except MissingEnvVarsError as e:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
-    setup_tracing(settings.service_name)
+    setup_tracing(settings)
 
     app.state.llm = AsyncOpenAI(
         base_url=settings.llm.url,
@@ -85,41 +84,68 @@ async def lifespan(app: FastAPI):
             e,
         )
 
+    #     app.state.rag_service = None
+    #     rag = get_rag()
+    #
+    #     # Ждём готовности Qdrant перед индексацией
+    #     logger.app.info("Ожидание готовности Qdrant...")
+    #     max_retries = 30
+    #     for attempt in range(max_retries):
+    #         try:
+    #             from qdrant_client import QdrantClient
+    #
+    #             qdrant_client = QdrantClient(url=settings.qdrant_url)
+    #             # count() — синхронный метод, не требует await
+    #             qdrant_client.count(settings.rag_collection)
+    #             logger.app.info("Qdrant готов")
+    #             break
+    #         except Exception as e:
+    #             logger.app.warning(
+    #                 "Qdrant недоступен (попытка %d/%d): %s", attempt + 1, max_retries, e
+    #             )
+    #             await asyncio.sleep(2)
+    #     else:
+    #         logger.app.error("Qdrant не стал доступен за %d секунд", max_retries * 2)
+    #         raise RuntimeError("Qdrant не стал доступен")
+    #
+    #     await rag.build()
+    #     app.state.rag_service = rag
+    # Индексация + RAG (LlamaIndex) — опциональны: собираем один раз на старте.
+    # Импорт ленивый: llama_index тяжёлый, не нужен тестам без lifespan.
+    #
+    app.state.ingestion_service = None
     app.state.rag_service = None
-    rag = get_rag()
+    try:
+        from app.services.ingestion import IngestionService
+        from app.services.rag import RAGService
 
-    # Ждём готовности Qdrant перед индексацией
-    logger.app.info("Ожидание готовности Qdrant...")
-    max_retries = 30
-    for attempt in range(max_retries):
-        try:
-            from qdrant_client import QdrantClient
+        ingestion = IngestionService(settings)
+        app.state.ingestion_service = ingestion
+        # Первичная индексация корпуса только если коллекция пуста — на рестартах
+        # UPSERTS по сохранённому docstore всё равно пропустит неизменённое.
+        if ingestion.is_collection_empty():
+            await asyncio.to_thread(ingestion.ingest_all)
 
-            qdrant_client = QdrantClient(url=settings.qdrant_url)
-            # count() — синхронный метод, не требует await
-            qdrant_client.count(settings.rag_collection)
-            logger.app.info("Qdrant готов")
-            break
-        except Exception as e:
-            logger.app.warning(
-                "Qdrant недоступен (попытка %d/%d): %s", attempt + 1, max_retries, e
-            )
-            await asyncio.sleep(2)
-    else:
-        logger.app.error("Qdrant не стал доступен за %d секунд", max_retries * 2)
-        raise RuntimeError("Qdrant не стал доступен")
+        rag_service = RAGService()
+        await asyncio.to_thread(rag_service.build)
+        app.state.rag_service = rag_service
+        logger.app.info("RAG-сервис готов (коллекция %s)", settings.rag_collection)
+    except Exception as e:
+        logger.app.warning(
+            "RAG/индексация не инициализированы (%s) — /rag/query и /documents вернут 503",
+            e,
+        )
 
-    await rag.build()
-    app.state.rag_service = rag
-
-    # Агентный слой (LangGraph): ReAct-граф поверх RAG как инструмента.
-    # Импорт ленивый — langgraph/langchain не нужны тестам без lifespan.
+    # Агентный слой (LangGraph): персистентный ReAct-граф с HIL.
+    # Чекпоинтер держит соединение всё время работы приложения — граф
+    # поднимается через AsyncExitStack и закрывается на shutdown.
     app.state.agent_graph = None
+    agent_stack = AsyncExitStack()
     try:
         from langchain_openai import ChatOpenAI
 
-        from app.agents.graph import build_custom_graph
         from app.agents.tools import build_search_knowledge_base, multiply
+        from app.services.agent_persistent import agent_lifespan
 
         catalog = get_catalog()
 
@@ -149,9 +175,26 @@ async def lifespan(app: FastAPI):
                 }
             return await app.state.rag_service.answer(query)
 
+        async def _send_email(draft: dict) -> None:
+            # Учебный side-effect: реальную отправку (SMTP/API) подключаем по необходимости.
+            logger.app.info(
+                "send_email → %s: %s", draft.get("to"), draft.get("subject")
+            )
+
         agent_tools = [multiply, build_search_knowledge_base(_search_kb)]
-        app.state.agent_graph = build_custom_graph(agent_model, agent_tools)
-        logger.app.info("Агентный граф собран (%d инструмента)", len(agent_tools))
+        app.state.agent_graph = await agent_stack.enter_async_context(
+            agent_lifespan(
+                settings.agent_checkpointer,
+                agent_model,
+                agent_tools,
+                _send_email,
+                sqlite_path=settings.agent_sqlite_path,
+                postgres_url=settings.database_url,
+            )
+        )
+        logger.app.info(
+            "Персистентный агент собран (backend=%s)", settings.agent_checkpointer
+        )
     except Exception as e:
         logger.app.warning("Агентный граф не собран (%s) — /agent/chat вернёт 503", e)
 

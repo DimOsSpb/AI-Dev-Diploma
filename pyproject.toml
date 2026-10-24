@@ -22,6 +22,8 @@ dependencies = [
     "structlog>=0.14.2",
     "arize-phoenix>=17.11.0",
     "openinference-instrumentation-openai>=0.1.52",
+    "openinference-instrumentation-llama-index>=3,<4",
+    "openinference-instrumentation-langchain>=0.1",
     # "garak>=0.16.0",
     "aiofiles>=25.1.0",
     "sqlalchemy[asyncio]>=2.0",
@@ -46,6 +48,10 @@ dependencies = [
     "langchain>=1.0,<2",
     "langchain-openai>=1.0",
     "langchain-core>=1.0",
+    "langgraph-checkpoint-sqlite>=2.1",
+    "langgraph-checkpoint-postgres>=2.1",
+    "aiosqlite>=0.20",
+    "psycopg[binary,pool]>=3.2",
 ]
 
 
@@ -69,6 +75,7 @@ eval = [
 ]
 tracing = [
     "openinference-instrumentation-llama-index>=3,<4",
+    "openinference-instrumentation-langchain>=0.1",
     "opentelemetry-sdk",
     "opentelemetry-exporter-otlp",
 ]
