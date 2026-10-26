@@ -61,6 +61,9 @@ class LLMSettings(BaseSettings):
     llamacpp_url: str = Field(default="")
     llamacpp_default_model: str = Field(default="")
 
+    # Лимит токенов на один ответ агентной модели (защита от runaway generation).
+    agent_max_tokens: int = Field(default=2048)
+
 
 class MissingEnvVarsError(Exception):
     """Raised when required environment variables are not set."""
@@ -150,6 +153,17 @@ class Settings(BaseSettings):
     agent_checkpointer: Literal["memory", "sqlite", "postgres"] = "sqlite"
     # Файл SQLite-чекпоинтера при agent_checkpointer="sqlite".
     agent_sqlite_path: str = "var/agent_checkpoints.sqlite"
+
+    # Proxmox VE — инструменты инфраструктурного агента -------------------
+    # Авторизация по API-токену (Datacenter -> Permissions -> API Tokens).
+    pve_host: str = Field(default="")
+    pve_user: str = Field(default="")
+    pve_token_name: str = Field(default="")
+    pve_token_value: SecretStr = SecretStr("")
+    pve_verify_ssl: bool = Field(default=False)
+    # Нода/VMID для демонстрационного (безопасного) инструмента снапшота.
+    pve_default_node: str = Field(default="")
+    pve_default_vmid: int = Field(default=0)
 
     # API KEY валидатор
     @staticmethod

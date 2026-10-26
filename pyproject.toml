@@ -52,6 +52,7 @@ dependencies = [
     "langgraph-checkpoint-postgres>=2.1",
     "aiosqlite>=0.20",
     "psycopg[binary,pool]>=3.2",
+    "proxmoxer>=2.2",
 ]
 
 

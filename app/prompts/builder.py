@@ -16,6 +16,7 @@ from app.core.context import get_current_app
 from app.schemas.chat import Message
 
 from .loader import (
+    load_agent_system_prompt_template,
     load_classifier_few_shots,
     load_classifier_system_prompt,
     load_service_facts,
@@ -26,6 +27,7 @@ SERVICE_FACTS = load_service_facts()
 SYSTEM_PROMPT_TEMPLATE = load_system_prompt_template()
 CLASSIFIER_SYSTEM_PROMPT = load_classifier_system_prompt()
 CLASSIFIER_FEW_SHOTS = load_classifier_few_shots()
+AGENT_SYSTEM_PROMPT_TEMPLATE = load_agent_system_prompt_template()
 
 
 def build_system_prompt() -> str:
@@ -52,6 +54,11 @@ def build_messages(
 
     messages.append(Message(role="user", content=user_message))
     return messages
+
+
+def build_agent_system_prompt() -> str:
+    settings = get_settings()
+    return AGENT_SYSTEM_PROMPT_TEMPLATE.format(service_name=settings.service_name)
 
 
 def build_classifier_messages(user_message: str) -> list[ChatCompletionMessageParam]:

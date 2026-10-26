@@ -9,7 +9,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards.inline import topics_kb
+from bot.keyboards.inline import topic_label, topics_kb
 from bot.services.backend_client import BackendClient
 from bot.services.error_handling import handle_backend_error
 from bot.services.streaming import stream_to_chat
@@ -44,7 +44,7 @@ async def on_topic_selected(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AskFlow.waiting_for_question)
     if cb.message is not None:
         await cb.message.edit_text(  # pyright: ignore[reportAttributeAccessIssue]
-            f"Тема: {slug}\nЗадайте ваш вопрос текстом."
+            f"Тема: {topic_label(slug)}\nЗадайте ваш вопрос текстом."
         )
     await cb.answer()
 

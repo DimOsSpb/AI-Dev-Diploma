@@ -750,6 +750,7 @@ dependencies = [
     { name = "openinference-instrumentation-langchain" },
     { name = "openinference-instrumentation-llama-index" },
     { name = "openinference-instrumentation-openai" },
+    { name = "proxmoxer" },
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -824,6 +825,7 @@ requires-dist = [
     { name = "opentelemetry-exporter-otlp", marker = "extra == 'tracing'" },
     { name = "opentelemetry-sdk", marker = "extra == 'tracing'" },
     { name = "pandas", marker = "extra == 'eval'", specifier = ">=2" },
+    { name = "proxmoxer", specifier = ">=2.2" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.6" },
     { name = "pydantic-settings", specifier = ">=2.2" },
@@ -2811,6 +2813,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/9b/ca/25afc144934014700c52e05103c2421997482d561f3101ff352e1292fb81/protobuf-6.33.6-cp39-abi3-manylinux2014_s390x.whl", hash = "sha256:c96c37eec15086b79762ed265d59ab204dabc53056e3443e702d2681f4b39ce3", size = 339381, upload-time = "2026-03-18T19:04:54.616Z" },
     { url = "https://files.pythonhosted.org/packages/16/92/d1e32e3e0d894fe00b15ce28ad4944ab692713f2e7f0a99787405e43533a/protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl", hash = "sha256:e9db7e292e0ab79dd108d7f1a94fe31601ce1ee3f7b79e0692043423020b0593", size = 323436, upload-time = "2026-03-18T19:04:55.768Z" },
     { url = "https://files.pythonhosted.org/packages/c4/72/02445137af02769918a93807b2b7890047c32bfb9f90371cbc12688819eb/protobuf-6.33.6-py3-none-any.whl", hash = "sha256:77179e006c476e69bf8e8ce866640091ec42e1beb80b213c3900006ecfba6901", size = 170656, upload-time = "2026-03-18T19:04:59.826Z" },
+]
+
+[[package]]
+name = "proxmoxer"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/2e/5481ad9cc91eff6e585eabac5be94879bc2297b8b615c7427bce610d1447/proxmoxer-2.3.0.tar.gz", hash = "sha256:0b0b2067187af1fc6d4257a46ac68c8fd79cc25d2813637cdae7a9a98fbfd11f", size = 30830, upload-time = "2026-03-04T02:19:48.816Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f3/fa/598ceae13e96ac97cf8e9b481433587b87edddb4bb9200632bd8bd80e448/proxmoxer-2.3.0-py3-none-any.whl", hash = "sha256:1c03445e95cf9c53b6e50614dbaf561e0e1eb3ec878cf45ddde4bc4421c56743", size = 19796, upload-time = "2026-03-04T02:19:47.724Z" },
 ]
 
 [[package]]

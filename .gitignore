@@ -3,9 +3,11 @@ __pycache__/
 *.pyc
 .venv
 .env
+.env.bak*
 .python*
 .zed
 .rules
 .agent
 var/
 scripts/embedding/kb-builder/source
+Final work/

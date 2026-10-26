@@ -12,7 +12,7 @@ from app.chat.repositories.pg_repo import (
 from app.chat.repository import ChatRepository
 from app.chat.service import ChatService
 from app.core.config import get_settings
-from app.deps.providers import LLMDep, SessionFactoryDep
+from app.deps.providers import AgentGraphDep, LLMDep, SessionFactoryDep
 from app.services.rag import get_rag
 from app.services.rag.rag import RAGService
 
@@ -60,6 +60,7 @@ async def get_chat_service(
     llm: LLMDep,
     session_factory: SessionFactoryDep,
     rag_service: RagServiceDep,
+    agent_graph: AgentGraphDep,
 ) -> ChatService:
     settings = get_settings()
 
@@ -67,6 +68,7 @@ async def get_chat_service(
         repository=repo,
         llm_client=llm,
         rag_service=rag_service,
+        agent_graph=agent_graph,
         context_window=settings.chat_context_window,
         default_model=settings.llm.default_model,
     )

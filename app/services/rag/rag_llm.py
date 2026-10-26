@@ -60,6 +60,11 @@ class RagLLM(CustomLLM):
         formatted: bool = False,
         **kwargs: Any,
     ) -> CompletionResponse:
+        # Без этого thinking-режим Qwen3.5 на llama.cpp уйдёт в долгие рассуждения
+        # (см. extra_body в app/main.py для агента — та же причина).
+        kwargs.setdefault(
+            "extra_body", {"chat_template_kwargs": {"enable_thinking": False}}
+        )
 
         response = self._client.chat.completions.create(
             model=self._model,
@@ -82,6 +87,11 @@ class RagLLM(CustomLLM):
         formatted: bool = False,
         **kwargs: Any,
     ) -> CompletionResponse:
+        # См. комментарий в complete() выше — этот метод вызывается из
+        # RAGService.answer_sync() и без этого флага мог зависать в размышлениях.
+        kwargs.setdefault(
+            "extra_body", {"chat_template_kwargs": {"enable_thinking": False}}
+        )
 
         response = await self._aclient.chat.completions.create(
             model=self._model,
@@ -104,6 +114,9 @@ class RagLLM(CustomLLM):
         formatted: bool = False,
         **kwargs: Any,
     ):
+        kwargs.setdefault(
+            "extra_body", {"chat_template_kwargs": {"enable_thinking": False}}
+        )
         stream = self._client.chat.completions.create(
             model=self._model,
             messages=[

@@ -4,7 +4,7 @@
 1) остановку графа на interrupt перед опасным действием;
 2) историю чек-пойнтов (`aget_state_history`);
 3) чтение состояния на прошлом чек-пойнте (time-travel read);
-4) две ветки из одинакового входа — отказ и одобрение отправки.
+4) две ветки из одинакового входа — отказ и одобрение создания снапшота.
 
     uv run python -m scripts.time_travel_demo
 """
@@ -19,30 +19,31 @@ from langgraph.types import Command
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.agents.tools import multiply
+from app.agents.tools_proxmox import pve_create_snapshot
 from app.services.agent_persistent import build_agent
 
 
 class FakeChat:
-    """Content-aware заглушка: пока нет результата инструмента — просит send_email,
-    после — финализирует. Устойчива к перезапуску узла при resume."""
+    """Content-aware заглушка: пока нет результата инструмента — просит
+    pve_create_snapshot, после — финализирует. Устойчива к перезапуску узла
+    при resume."""
 
     def bind_tools(self, tools):
         return self
 
     async def ainvoke(self, messages):
         if any(getattr(m, "type", "") == "tool" for m in messages):
-            return AIMessage(content="Готово, письмо обработано.", id="ai-final")
+            return AIMessage(content="Готово, снапшот обработан.", id="ai-final")
         return AIMessage(
             content="",
-            id="ai-send",
+            id="ai-snapshot",
             tool_calls=[
                 {
-                    "name": "send_email",
+                    "name": "pve_create_snapshot",
                     "args": {
-                        "to": "client@example.com",
-                        "subject": "Счёт №42",
-                        "body": "Ваш счёт во вложении.",
+                        "node": "pve-01",
+                        "vmid": 100,
+                        "snapshot_name": "demo-snap",
                     },
                     "id": "call-1",
                     "type": "tool_call",
@@ -53,7 +54,7 @@ class FakeChat:
 
 def _initial() -> dict:
     return {
-        "messages": [HumanMessage("отправь клиенту счёт")],
+        "messages": [HumanMessage("сделай снапшот тестовой VM")],
         "iteration_count": 0,
         "tool_results": [],
         "draft": None,
@@ -62,14 +63,15 @@ def _initial() -> dict:
 
 
 async def main() -> None:
-    sent_log: list[dict] = []
+    created_log: list[dict] = []
 
-    async def send_fn(draft: dict) -> None:
-        sent_log.append(draft)
+    async def create_fn(draft: dict) -> str:
+        created_log.append(draft)
+        return f"снапшот '{draft['snapshot_name']}' создан"
 
     async with AsyncSqliteSaver.from_conn_string(":memory:") as saver:
         await saver.setup()
-        graph = build_agent(saver, FakeChat(), [multiply], send_fn)  # pyright: ignore[reportArgumentType]
+        graph = build_agent(saver, FakeChat(), [], pve_create_snapshot, create_fn)  # pyright: ignore[reportArgumentType]
         role = "write-with-approve"
         config = {"configurable": {"thread_id": "demo", "user_role": role}}
 
@@ -81,7 +83,10 @@ async def main() -> None:
         async for snap in graph.aget_state_history(config):  # pyright: ignore[reportArgumentType]
             cid = snap.config["configurable"]["checkpoint_id"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
             print(f"   {cid}  next={snap.next}")
-            if snap.next == ("confirm_and_send",) and pre_interrupt_id is None:
+            if (
+                snap.next == ("confirm_and_create_snapshot",)
+                and pre_interrupt_id is None
+            ):
                 pre_interrupt_id = cid
 
         past = await graph.aget_state({
@@ -101,7 +106,7 @@ async def main() -> None:
         approved = await graph.ainvoke(Command(resume=True), alt)  # pyright: ignore[reportArgumentType]
         print(
             f"4) две ветки: отказ → sent={rejected['sent']}, "
-            f"одобрение → sent={approved['sent']}, отправок={len(sent_log)}"
+            f"одобрение → sent={approved['sent']}, снапшотов_создано={len(created_log)}"
         )
         print(
             "Итог: один и тот же вход дал две ветки — отказ (sent=False) и одобрение (sent=True)."

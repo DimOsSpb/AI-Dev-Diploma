@@ -22,6 +22,18 @@ import tenacity
 
 log = logging.getLogger(__name__)
 
+# Типы SSE-кадров, которые пробрасываются вызывающему коду как есть.
+# "token"/"message_saved" — исходный контракт; "tool_call"/"tool_result"/
+# "interrupt"/"error" — расширение агентного слоя (см. app/chat/service.py).
+_FORWARDED_EVENT_TYPES = frozenset({
+    "token",
+    "message_saved",
+    "tool_call",
+    "tool_result",
+    "interrupt",
+    "error",
+})
+
 
 class BackendClient:
     def __init__(self, http: httpx.AsyncClient, admin_token: str = "") -> None:
@@ -117,8 +129,13 @@ class BackendClient:
     ) -> AsyncIterator[dict]:
         """POST /chats/{id}/messages multipart; парсит SSE, yields dict-события.
 
-        Backend отдаёт поток вида:
+        Backend отдаёт поток вида (см. `app/chat/routes.py` — агентный
+        SSE-контракт):
             data: {"type":"token","delta":"..."}\\n\\n
+            data: {"type":"tool_call","name":"...","args":{...}}\\n\\n
+            data: {"type":"tool_result","name":"...","result":"..."}\\n\\n
+            data: {"type":"interrupt","payload":{...}}\\n\\n
+            data: {"type":"error","message":"..."}\\n\\n
             data: {"type":"message_saved","message_id":"..."}\\n\\n
             data: {"type":"done"}\\n\\n
 
@@ -162,7 +179,51 @@ class BackendClient:
                     ptype = payload.get("type")
                     if ptype == "done":
                         return
-                    if ptype in ("token", "message_saved"):
+                    if ptype in _FORWARDED_EVENT_TYPES:
+                        yield payload
+
+        async for event in _stream_request():
+            yield event
+
+    async def resume_message(
+        self,
+        chat_id: UUID,
+        decision: bool,
+        owner_external_id: str | None = None,
+    ) -> AsyncIterator[dict]:
+        """POST /chats/{id}/messages/resume — возобновляет агента после HIL-
+        подтверждения (нажата кнопка в боте). Стримит тот же контракт,
+        что `send_message`.
+        """
+        headers = (
+            {"X-Owner-External-Id": owner_external_id} if owner_external_id else {}
+        )
+
+        @tenacity.retry(
+            stop=tenacity.stop_after_attempt(2),
+            wait=tenacity.wait_fixed(3),
+            retry=tenacity.retry_if_exception_type((
+                httpx.ConnectError,
+                httpx.ConnectTimeout,
+            )),
+        )
+        async def _stream_request():
+            async with self.http.stream(
+                "POST",
+                f"/chats/{chat_id}/messages/resume",
+                json={"decision": decision},
+                headers=headers,
+                timeout=120.0,
+            ) as r:
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    payload = json.loads(line.removeprefix("data: "))
+                    ptype = payload.get("type")
+                    if ptype == "done":
+                        return
+                    if ptype in _FORWARDED_EVENT_TYPES:
                         yield payload
 
         async for event in _stream_request():

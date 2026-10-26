@@ -26,3 +26,7 @@ def load_classifier_system_prompt() -> str:
 
 def load_classifier_few_shots() -> list:
     return json.loads(_read_prompt_file("classifier_few_shots.json"))
+
+
+def load_agent_system_prompt_template() -> str:
+    return _read_prompt_file("agent_system_prompt.txt")

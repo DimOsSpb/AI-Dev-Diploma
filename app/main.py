@@ -50,7 +50,7 @@ except MissingEnvVarsError as e:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
-    setup_tracing(settings)
+    setup_tracing(settings)  # pyright: ignore[reportArgumentType]
 
     app.state.llm = AsyncOpenAI(
         base_url=settings.llm.url,
@@ -127,7 +127,7 @@ async def lifespan(app: FastAPI):
             await asyncio.to_thread(ingestion.ingest_all)
 
         rag_service = RAGService()
-        await asyncio.to_thread(rag_service.build)
+        await rag_service.build()
         app.state.rag_service = rag_service
         logger.app.info("RAG-сервис готов (коллекция %s)", settings.rag_collection)
     except Exception as e:
@@ -144,7 +144,13 @@ async def lifespan(app: FastAPI):
     try:
         from langchain_openai import ChatOpenAI
 
-        from app.agents.tools import build_search_knowledge_base, multiply
+        from app.agents.tools import build_search_knowledge_base
+        from app.agents.tools_proxmox import (
+            create_snapshot,
+            pve_create_snapshot,
+            pve_list_vms,
+            pve_status,
+        )
         from app.services.agent_persistent import agent_lifespan
 
         catalog = get_catalog()
@@ -162,8 +168,21 @@ async def lifespan(app: FastAPI):
             base_url=config.url,
             model=config.model,
             temperature=0,
+            max_completion_tokens=settings.llm.agent_max_tokens,
             timeout=settings.llm.request_timeout,
             api_key=api_key,  # pyright: ignore[reportArgumentType]
+            # Отключаем Thinking Mode у Qwen3.5 на llama.cpp — без этого модель
+            # уходит в неограниченные размышления и висит/генерирует без остановки.
+            # extra_body передаётся как именной параметр в openai SDK, который сам
+            # делает top-level merge в JSON-теле запроса — это подтверждено
+            # экспериментально (scripts/tests/test_stream.py), работает как с tools,
+            # так и без. model_kwargs здесь НЕ годится: эти ключи уходят в openai SDK
+            # как отдельные именнованные kwargs .create(...), а не в тело JSON —
+            # незнакомый kwarg ломает вызов (подтверждено в проде:
+            # "AsyncCompletions.create() got an unexpected keyword argument 'chat_template_kwargs'").
+            extra_body={
+                "chat_template_kwargs": {"enable_thinking": False},
+            },
         )
 
         async def _search_kb(query: str) -> dict:
@@ -173,21 +192,35 @@ async def lifespan(app: FastAPI):
                     "sources": [],
                     "confident": False,
                 }
-            return await app.state.rag_service.answer(query)
+            # answer() - SSE-генератор для /chats/.../messages, а для
+            # вызова из агентного tool нужен один готовый ответ —
+            # answer_sync() возвращает {answer, top_score, sources, confident}.
+            return await app.state.rag_service.answer_sync(query)
 
-        async def _send_email(draft: dict) -> None:
-            # Учебный side-effect: реальную отправку (SMTP/API) подключаем по необходимости.
+        async def _create_snapshot(draft: dict) -> str:
+            # Реальный вызов Proxmox API — только после подтверждения человеком.
+            result = await create_snapshot(draft)
             logger.app.info(
-                "send_email → %s: %s", draft.get("to"), draft.get("subject")
+                "pve_create_snapshot node=%s vmid=%s name=%s -> %s",
+                draft.get("node"),
+                draft.get("vmid"),
+                draft.get("snapshot_name"),
+                result,
             )
+            return result
 
-        agent_tools = [multiply, build_search_knowledge_base(_search_kb)]
+        agent_tools = [
+            build_search_knowledge_base(_search_kb),
+            pve_status,
+            pve_list_vms,
+        ]
         app.state.agent_graph = await agent_stack.enter_async_context(
             agent_lifespan(
                 settings.agent_checkpointer,
                 agent_model,
                 agent_tools,
-                _send_email,
+                pve_create_snapshot,
+                _create_snapshot,
                 sqlite_path=settings.agent_sqlite_path,
                 postgres_url=settings.database_url,
             )

@@ -5,15 +5,22 @@
 вернуть 403 до старта SSE) и rate-limit через Depends; идентификатор
 владельца берётся из заголовка X-Owner-External-Id.
 
-SSE-контракт `POST /chats/{chat_id}/messages` (стабильный — клиент
-пишется один раз):
+SSE-контракт `POST /chats/{chat_id}/messages` и `POST /chats/{chat_id}/messages/resume`
+(стабильный — клиент пишется один раз). Сообщение гонится через
+агентный LangGraph-граф (`app/chat/service.py::ChatService._run_agent`):
 
     data: {"type":"token","delta":"<chunk-of-text>"}\\n\\n
-    ...
+    data: {"type":"tool_call","name":"...","args":{...}}\\n\\n
+    data: {"type":"tool_result","name":"...","result":"..."}\\n\\n
+    data: {"type":"interrupt","payload":{...}}\\n\\n
+    data: {"type":"error","message":"..."}\\n\\n
     data: {"type":"message_saved","message_id":"<uuid>"}\\n\\n
-    data: {"type":"sources","data":[{"file_name":"...","page":...,"score":...,"snippet":"..."}]}\\n\\n
     data: {"type":"done"}\\n\\n
 
+`interrupt` — агент дошёл до опасного действия (например, создание
+снапшота Proxmox) и ждёт подтверждения — клиент должен вызвать
+`POST /messages/resume` с `{"decision": true|false}`. `assistant`-сообщение
+не сохраняется, пока граф не доведёт после resume.
 `message_saved` — кадр после сохранения assistant-сообщения в БД, нужен
 боту чтобы прицепить feedback-клавиатуру к финальному send_message.
 `done` всегда последний (и при ошибке — в finally).
@@ -73,6 +80,10 @@ class CreateChatOut(BaseModel):
 class FeedbackIn(BaseModel):
     owner_external_id: str
     value: FeedbackValue  # Pydantic сам провалидирует Literal["up","down"]
+
+
+class ResumeIn(BaseModel):
+    decision: bool | str = True
 
 
 class RagQueryIn(BaseModel):
@@ -151,6 +162,43 @@ async def post_message(
                 # {"type":"message_saved","message_id":"..."}.
                 if event.get("type") == "token":
                     # sanitize: \n -> \\n для корректного отображения в Telegram
+                    event = {
+                        "type": "token",
+                        "delta": sanitize_newlines(event["delta"]),
+                    }
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        finally:
+            yield 'data: {"type":"done"}\n\n'
+
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
+
+
+@router.post(
+    "/{chat_id}/messages/resume",
+    summary="Возобновить агента после HIL-подтверждения (SSE streaming)",
+)
+async def resume_message(
+    chat_id: UUID,
+    body: ResumeIn,
+    chat_service: ChatServiceDep,
+) -> StreamingResponse:
+    """Вызывается после кадра `{"type":"interrupt",...}` в ответе на
+    `POST /messages` — когда пользователь подтвердил/отклонил опасное
+    действие (например, кнопкой в боте). SSE-контракт тот же, что и у
+    `POST /messages`.
+    """
+
+    async def event_source():
+        try:
+            async for event in chat_service.resume(
+                chat_id=chat_id,
+                decision=body.decision,
+            ):
+                if event.get("type") == "token":
                     event = {
                         "type": "token",
                         "delta": sanitize_newlines(event["delta"]),
