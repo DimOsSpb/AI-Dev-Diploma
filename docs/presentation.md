@@ -1,15 +1,10 @@
 <!--
 Презентация дипломного проекта.
-Формат: Markdown-слайды (разделитель "---" = новый слайд).
+Формат: Markdown-слайды (разделитель "---" = новый слайд), 12 слайдов.
 
-Как смотреть/конвертировать:
-  - Прямо в Zed/GitHub — рендерится как обычный Markdown, слайды читаются сверху вниз.
-  - В PDF/PPTX через Marp (рекомендуется):
-      npx @marp-team/marp-cli docs/presentation.md -o docs/presentation.pdf
-      npx @marp-team/marp-cli docs/presentation.md -o docs/presentation.pptx
-    Marp понимает обычный Markdown + "---" как разрыв слайда, фронт-маттер ниже
-    (theme, paginate) используется только Marp'ом и безопасно игнорируется везде.
-  - Через pandoc (альтернатива): pandoc docs/presentation.md -o docs/presentation.pptx
+КАК СКОНВЕРтИРОВАть В PDF/PPTX — см. docs/HOW_TO_BUILD_SLIDES.md
+(рекомендуется Marp: точно 12 слайдов, таблицы/mermaid рендерятся как задумано;
+pandoc работает без Node.js, но разбивает слайды с широкими таблицами на несколько).
 -->
 
 ---

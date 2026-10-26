@@ -21,6 +21,8 @@ Proxmox-кластера/кворума) — см. README.md (K8s и Linux ад�
 """
 
 import asyncio
+import time
+from collections import deque
 
 from langchain_core.tools import tool
 from proxmoxer import ProxmoxAPI
@@ -32,6 +34,60 @@ class PVEException(Exception):
     def __init__(self, message: str = "PVEException") -> None:
         self.message = message
         super().__init__(self.message)
+
+
+class PVEGuardError(PVEException):
+    """Снапшот отклонён защитой стенда (не из-за ошибки Proxmox API)."""
+
+
+# --------------------------------------------------------------------------
+# Защита боевого Proxmox-кластера от спама снапшотами.
+#
+# Прототип ходит в РЕАЛЬНЫЙ домашний кластер автора (см. README.md, раздел
+# «Сценарии для проверяющего»). Инструмент опасный по определению (создаёт
+# снапшот), поэтому помимо HIL-подтверждения в графе (agent_persistent.py)
+# здесь — ещё два независимых барьера перед самим API-вызовом:
+#
+# 1. Белый список: снапшот разрешён ТОЛЬКО для node+vmid из настроек
+#    (PVE_DEFAULT_NODE/PVE_DEFAULT_VMID) — заранее выделенной демо-VM.
+#    Любая другая пара node/vmid отклоняется ДО обращения к Proxmox API,
+#    независимо от того, что попросил пользователь или модель.
+# 2. Rate-limit: не больше `pve_snapshot_rate_limit` подтверждённых снапшотов
+#    за скользящее окно `pve_snapshot_rate_window_seconds` на весь процесс
+#    (не на пользователя — умышленно строже, т.к. это общий ресурс).
+#    In-memory и per-process — осознанно простое решение для прототипа:
+#    если понадобится многопроцессный деплой, то же окно нужно хранить в
+#    Redis, в текущем single-instance docker compose стенде это избыточно.
+_snapshot_calls: deque[float] = deque()
+
+
+def _check_snapshot_allowed(node: str, vmid: int) -> None:
+    settings = get_settings()
+
+    allowed_node = settings.pve_default_node
+    allowed_vmid = settings.pve_default_vmid
+    if not allowed_node or not allowed_vmid:
+        raise PVEGuardError(
+            "снапшоты временно отключены: не задана демонстрационная VM "
+            "(PVE_DEFAULT_NODE/PVE_DEFAULT_VMID)"
+        )
+    if node != allowed_node or vmid != allowed_vmid:
+        raise PVEGuardError(
+            f"снапшот разрешён только для демонстрационной VM "
+            f"{allowed_node}/{allowed_vmid}, запрошено {node}/{vmid}"
+        )
+
+    now = time.monotonic()
+    window = settings.pve_snapshot_rate_window_seconds
+    limit = settings.pve_snapshot_rate_limit
+    while _snapshot_calls and now - _snapshot_calls[0] > window:
+        _snapshot_calls.popleft()
+    if len(_snapshot_calls) >= limit:
+        raise PVEGuardError(
+            f"превышен лимит снапшотов ({limit} за {window} сек.) — "
+            "повторите попытку позже, это защита демо-стенда от спама"
+        )
+    _snapshot_calls.append(now)
 
 
 def get_pve_client() -> ProxmoxAPI:
@@ -220,6 +276,7 @@ def pve_create_snapshot(node: str, vmid: int, snapshot_name: str) -> str:
 
 
 def _create_snapshot_sync(node: str, vmid: int, snapshot_name: str) -> str:
+    _check_snapshot_allowed(node, vmid)
     try:
         proxmox = get_pve_client()
         proxmox.nodes(node).qemu(vmid).snapshot.post(snapname=snapshot_name)

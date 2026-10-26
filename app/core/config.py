@@ -164,6 +164,10 @@ class Settings(BaseSettings):
     # Нода/VMID для демонстрационного (безопасного) инструмента снапшота.
     pve_default_node: str = Field(default="")
     pve_default_vmid: int = Field(default=0)
+    # Защита боевого Proxmox-кластера от спама снапшотами со стороны
+    # проверяющего: не больше N снапшотов за окно времени на весь процесс.
+    pve_snapshot_rate_limit: int = Field(default=3)
+    pve_snapshot_rate_window_seconds: int = Field(default=600)
 
     # API KEY валидатор
     @staticmethod

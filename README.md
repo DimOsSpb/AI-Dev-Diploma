@@ -80,6 +80,8 @@ LlamaIndex). Автор: Dmitrii Osipov.
 Боту можно задать (адрес/ссылку на развёрнутого бота см. в сопроводительном письме к
 сдаче работы):
 
+![Демонстрация работы Telegram-бота: RAG-ответ с источниками и вызов Proxmox-инструмента](docs/media/telegram-bot.png)
+
 **Вопросы по базе знаний (RAG, ответ с источниками):**
 1. «Что такое Pod в Kubernetes и чем он отличается от контейнера?»
 2. «Как устроена сетевая модель Kubernetes (CNI)?»
@@ -92,11 +94,20 @@ LlamaIndex). Автор: Dmitrii Osipov.
 **Опасное действие с подтверждением (HIL):**
 6. «Сделай снапшот тестовой VM» → агент готовит действие, бот присылает кнопки
    «✅ Подтвердить» / «❌ Отклонить»; снапшот реально создаётся в Proxmox только
-   после нажатия «Подтвердить».
+   после нажатия «Подтвердить». Видео с полным сценарием (вызов инструмента → `interrupt` →
+   подтверждение в Telegram → снапшот реально появился в Proxmox):
+   [`docs/media/vm-snapshot.webm`](docs/media/vm-snapshot.webm).
+
+> **Ограницение для безопасности стенда.** Бот работает на реальном домашнем Proxmox-кластере
+> автора. Инструмент `pve_create_snapshot` жёстко ограничен сервером на уровне
+> `node`/`vmid` (только заранее заданная демонстрационная VM) и рата-лимитом на
+> количество снапшотов в сутки на один чат — детали в
+> [«Инструменты агента»](#инструменты-агента). Даже многократные повторные подтверждения
+> не смогут создать снапшоты на других VM или заспамить хранилище снапшотов.
 
 **Граница возможностей:**
 7. Вопрос вне базы знаний и вне инструментов (например, «какая погода в Москве») —
-   ассистент честно отвечает, что не может помочь, вместо выдумывания ответа.
+   ассистент честно отвечает, что не может помощь, вместо выдумывания ответа.
 
 ## Архитектура
 
@@ -192,11 +203,11 @@ Human-in-the-Loop реализован через `langgraph.types.interrupt()`:
 |---|---|---|
 | vCPU | 4 ядра | FastAPI + LangGraph + Qdrant + Postgres одновременно не требуют больше — нагрузка низкая, задержки даёт внешний LLM-запрос (сетевой I/O), не CPU |
 | RAM | 8 GB | Qdrant + Postgres + 2 Python-процесса (app, bot) + Phoenix — на корпусе в ~114 файлов этого достаточно с заделом |
-| Диск | 40–50 GB SSD | Образы Docker + векторный индекс Qdrant + логи + история чата в Postgres |
+| Диск | 30 GB SSD | Образы Docker + векторный индекс Qdrant + логи + история чата в Postgres |
 | Сеть | бридж к VM-сети proxmox, доступность до GPU-сервера и в Telegram API | агент дергает запросы к `llama.cpp` на отдельный хост с GPU, боту нужен outbound к `api.telegram.org` |
-| ОС | Ubuntu Server 24.04 LTS | Docker + docker compose, никаких специальных требований к ядру |
+| ОС | Debian 13 | Docker + docker compose, никаких специальных требований к ядру |
 
-Команды развёртывания на свежей VM (Ubuntu 24.04, доступ выдан сети):
+Команды развёртывания на свежей VM (Debian 13, доступ выдан сети):
 
 ```bash
 # 1. системные обновления + Docker
@@ -205,8 +216,12 @@ curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER
 newgrp docker
 
-# 2. клон проекта
- git clone <URL репозитория> diploma && cd diploma
+# 2. На хосте разработки, чтобы не собирать images на слабой виртуалке, просто перенесем их 
+docker save $(docker compose config --images) | gzip > /home/odv/diploma_all_images.tar.gz
+scp /home/odv/diploma_all_images.tar.gz root@iiasist:/tmp/
+docker load < /tmp/diploma_all_images.tar.gz
+# Отдельно скопировать тома из /var/lib/docker/volumes
+- qdrant & postresql
 
 # 3. конфигурация
 cp .env.example .env
@@ -352,6 +367,8 @@ docker compose exec app python scripts/ingest.py   # см. scripts/ для де�
 | `REDIS_URL` | — | Кеш ответов LLM; при недоступности сервис работает без кеша |
 | `PHOENIX_ENABLED` / `PHOENIX_COLLECTOR_ENDPOINT` | `false` | Трейсинг через Arize Phoenix |
 | `PVE_VERIFY_SSL` | `false` | Проверка TLS-сертификата Proxmox (самоподписанный в большинстве стендов) |
+| `PVE_SNAPSHOT_RATE_LIMIT` | `3` | Защита боевого кластера: максимум подтверждённых снапшотов за окно времени (на весь процесс) |
+| `PVE_SNAPSHOT_RATE_WINDOW_SECONDS` | `600` | Окно времени (сек.) для `PVE_SNAPSHOT_RATE_LIMIT` |
 | `BOT_ADMIN_IDS` | — | Telegram ID администраторов (доступ к `/stats`) |
 | `PROXY` | — | SOCKS5-прокси для бота, если Telegram недоступен напрямую из сети сервера |
 
