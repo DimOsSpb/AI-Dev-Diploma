@@ -180,8 +180,13 @@ async def lifespan(app: FastAPI):
             # как отдельные именнованные kwargs .create(...), а не в тело JSON —
             # незнакомый kwarg ломает вызов (подтверждено в проде:
             # "AsyncCompletions.create() got an unexpected keyword argument 'chat_template_kwargs'").
+            # repeat_penalty — при temperature=0 (greedy decoding) модель может
+            # зациклиться и повторить уже сгенерированную фразу (например,
+            # дважды подряд повторить подтверждение успеха создания снапшота).
+            # Параметр специфичен для llama.cpp, но так же уходит через extra_body.
             extra_body={
                 "chat_template_kwargs": {"enable_thinking": False},
+                "repeat_penalty": 1.1,
             },
         )
 

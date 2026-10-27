@@ -93,7 +93,11 @@ async def test_resume_true_creates_snapshot():
 
         assert final["sent"] is True
         create_fn.assert_awaited_once()
-        assert create_fn.await_args.args[0]["snapshot_name"] == "demo-snap"  # pyright: ignore[reportOptionalMemberAccess]
+        # prepare_snapshot добавляет временную метку к имени от модели, чтобы
+        # повторные запросы не упирались в "snapshot already exists" в Proxmox.
+        sent_name = create_fn.await_args.args[0]["snapshot_name"]  # pyright: ignore[reportOptionalMemberAccess]
+        assert sent_name.startswith("demo-snap-")
+        assert sent_name != "demo-snap"
 
 
 @pytest.mark.asyncio

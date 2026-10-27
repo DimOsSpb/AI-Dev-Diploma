@@ -20,6 +20,7 @@ import asyncio
 import operator
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, TypedDict
 
 from langchain_core.language_models import BaseChatModel
@@ -115,13 +116,23 @@ def build_agent(
         return {"messages": messages, "tool_results": results}
 
     async def prepare_snapshot(state: PersistentAgentState) -> dict:
-        """Idempotent: собирает payload снапшота из tool_call. Без side-effect."""
+        """Idempotent: собирает payload снапшота из tool_call. Без side-effect.
+
+        Имя снапшота придумывает LLM и часто повторяет одно и то же имя между
+        запросами пользователя. Proxmox API отклоняет создание снапшота с
+        именем, которое уже существует на VM, и модель может принять этот
+        отказ за успех ("снапшот уже создан"). Чтобы каждый подтверждённый
+        запрос гарантированно создавал новый снапшот, сюда добавляется
+        временная метка — независимо от того, что предложила модель.
+        """
         call = _find_call(state["messages"][-1], DANGEROUS_TOOL)
         args = call["args"]
+        base_name = args.get("snapshot_name") or "snap"
+        unique_name = f"{base_name}-{datetime.now(UTC):%Y%m%d-%H%M%S}"
         draft = {
             "node": args.get("node", ""),
             "vmid": args.get("vmid", ""),
-            "snapshot_name": args.get("snapshot_name", ""),
+            "snapshot_name": unique_name,
             "tool_call_id": call["id"],
         }
         return {"draft": draft}

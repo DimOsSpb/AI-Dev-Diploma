@@ -26,8 +26,10 @@ from collections import deque
 
 from langchain_core.tools import tool
 from proxmoxer import ProxmoxAPI
+from proxmoxer.tools.tasks import Tasks
 
 from app.core.config import get_settings
+from app.observability.logging import logger
 
 
 class PVEException(Exception):
@@ -68,13 +70,15 @@ def _check_snapshot_allowed(node: str, vmid: int) -> None:
     allowed_vmid = settings.pve_default_vmid
     if not allowed_node or not allowed_vmid:
         raise PVEGuardError(
-            "снапшоты временно отключены: не задана демонстрационная VM "
-            "(PVE_DEFAULT_NODE/PVE_DEFAULT_VMID)"
+            "Снапшоты временно отключены.\n"
+            "Причина: не задана демонстрационная VM "
+            "(PVE_DEFAULT_NODE/PVE_DEFAULT_VMID)."
         )
     if node != allowed_node or vmid != allowed_vmid:
         raise PVEGuardError(
-            f"снапшот разрешён только для демонстрационной VM "
-            f"{allowed_node}/{allowed_vmid}, запрошено {node}/{vmid}"
+            "Снапшот отклонён защитой демо-стенда.\n"
+            f"Разрешена только демонстрационная VM {allowed_node}/{allowed_vmid}, "
+            f"запрошено {node}/{vmid}."
         )
 
     now = time.monotonic()
@@ -84,8 +88,8 @@ def _check_snapshot_allowed(node: str, vmid: int) -> None:
         _snapshot_calls.popleft()
     if len(_snapshot_calls) >= limit:
         raise PVEGuardError(
-            f"превышен лимит снапшотов ({limit} за {window} сек.) — "
-            "повторите попытку позже, это защита демо-стенда от спама"
+            "Снапшот отклонён защитой демо-стенда.\n"
+            f"Превышен лимит ({limit} за {window} сек.) — повторите попытку позже."
         )
     _snapshot_calls.append(now)
 
@@ -196,7 +200,7 @@ async def pve_status(
             _pve_status_sync, include_nodes, check_quorum_only, specific_node
         )
     except PVEException as e:
-        return f"Ошибка при запросе статуса Proxmox: {e.message}"
+        return f"Ошибка при запросе статуса Proxmox:\n{e.message}"
 
 
 def _format_vm_list(qemu_list: list[dict], lxc_list: list[dict], node: str) -> str:
@@ -254,7 +258,7 @@ async def pve_list_vms(node: str | None = None) -> str:
     try:
         return await asyncio.to_thread(_pve_list_vms_sync, node)
     except PVEException as e:
-        return f"Ошибка при запросе списка VM: {e.message}"
+        return f"Ошибка при запросе списка VM:\n{e.message}"
 
 
 @tool
@@ -265,8 +269,11 @@ def pve_create_snapshot(node: str, vmid: int, snapshot_name: str) -> str:
     без простоя). Требует подтверждения человека перед выполнением.
 
     Args:
-        node: имя узла Proxmox, на котором находится VM (например, 'pve-01').
-        vmid: числовой идентификатор VM/CT.
+        node: имя узла Proxmox, на котором находится VM. Используй имя узла
+            ровно так, как его называет пользователь или как оно пришло из
+            pve_status/pve_list_vms (например, 'pve') — не дополняй и не
+            изменяй его по своим предположениям.
+        vmid: числовой идентификатор VM/CT, как указал пользователь.
         snapshot_name: имя снапшота (латиница/цифры/дефис, без пробелов).
     """
     # Тело не делает реального вызова: граф перехватывает этот tool_call и
@@ -275,13 +282,64 @@ def pve_create_snapshot(node: str, vmid: int, snapshot_name: str) -> str:
     return "queued-for-approval"
 
 
+def _resolve_vm_kind(proxmox: ProxmoxAPI, node: str, vmid: int) -> str:
+    """Определяет, это QEMU VM или LXC-контейнер.
+
+    Нужно для выбора правильного эндпоинта снапшота: `qemu(vmid).snapshot`
+    и `lxc(vmid).snapshot` — разные пути в Proxmox API. Раньше код всегда
+    шёл в `qemu(...)`, и для LXC-контейнера API отвечал на несуществующий
+    vmid в QEMU-дереве без явной ошибки видимой пользователю.
+    """
+    qemu_ids = {item.get("vmid") for item in (proxmox.nodes(node).qemu.get() or [])}
+    if vmid in qemu_ids:
+        return "qemu"
+    lxc_ids = {item.get("vmid") for item in (proxmox.nodes(node).lxc.get() or [])}
+    if vmid in lxc_ids:
+        return "lxc"
+    raise PVEException(f"VM/CT с vmid={vmid} не найден на узле '{node}'")
+
+
 def _create_snapshot_sync(node: str, vmid: int, snapshot_name: str) -> str:
+    """Создаёт снапшот и ЖДЁТ завершения фоновой задачи Proxmox.
+
+    `snapshot.post()` в Proxmox API асинхронный: HTTP-ответ 200 с UPID
+    приходит сразу же, как только задача поставлена в очередь, а не когда
+    снапшот реально создан. Задача может упасть позже на ноде (диск, лок VM
+    и т.п.) — без опроса `tasks(upid).status` это осталось бы незамеченным,
+    и агент бы бодро репортовал "создан" для снапшота, которого нет.
+    """
     _check_snapshot_allowed(node, vmid)
     try:
         proxmox = get_pve_client()
-        proxmox.nodes(node).qemu(vmid).snapshot.post(snapname=snapshot_name)
-        return f"Снапшот '{snapshot_name}' для VM {vmid} на узле {node} создан."
+        kind = _resolve_vm_kind(proxmox, node, vmid)
+        endpoint = (
+            proxmox.nodes(node).qemu(vmid)
+            if kind == "qemu"
+            else proxmox.nodes(node).lxc(vmid)
+        )
+        upid = endpoint.snapshot.post(snapname=snapshot_name)
+
+        status = Tasks.blocking_status(proxmox, upid, timeout=120, polling_interval=1)
+
+        if status is None:
+            raise PVEException(
+                f"задача создания снапшота не завершилась за 120 сек (UPID={upid})"
+            )
+        if status.get("exitstatus") != "OK":
+            raise PVEException(
+                f"задача Proxmox завершилась с ошибкой: {status.get('exitstatus')}"
+            )
+
+        return f"Снапшот '{snapshot_name}' для {kind.upper()} {vmid} на узле {node} создан."
+    except PVEException:
+        raise
     except Exception as e:
+        logger.app.exception(
+            "pve_create_snapshot failed node=%s vmid=%s name=%s",
+            node,
+            vmid,
+            snapshot_name,
+        )
         raise PVEException(str(e)) from e
 
 
@@ -299,4 +357,4 @@ async def create_snapshot(draft: dict) -> str:
             draft["snapshot_name"],
         )
     except PVEException as e:
-        return f"Ошибка при создании снапшота: {e.message}"
+        return f"Ошибка при создании снапшота:\n{e.message}"

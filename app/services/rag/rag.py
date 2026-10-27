@@ -413,7 +413,15 @@ class RAGService:
             "confident": True,
         }
 
-    async def close(self) -> None: ...
+    async def close(self) -> None:
+        try:
+            await self._aclient.close()
+        except Exception:
+            logger.debug("ошибка при закрытии async Qdrant-клиента", exc_info=True)
+        try:
+            self._client.close()
+        except Exception:
+            logger.debug("ошибка при закрытии Qdrant-клиента", exc_info=True)
 
 
 def _demo() -> None:
